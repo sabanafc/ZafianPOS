@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+  font-feature-settings: 'cv02','cv03','cv04','tnum';
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dark body { @apply bg-slate-950 text-slate-100; }
+
+* { -webkit-user-select: none; user-select: none; }
+input, textarea { -webkit-user-select: text; user-select: text; }
+
+/* Focus ring WCAG yang selalu terlihat */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ============ STRUK ============ */
+.receipt {
+  width: 58mm;
+  max-width: 58mm;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #000;
+  background: #fff;
+}
+.receipt.paper-80 { width: 80mm; max-width: 80mm; font-size: 12.5px; }
+.receipt * { font-family: inherit; }
+.receipt table { width: 100%; border-collapse: collapse; }
+.receipt td { vertical-align: top; padding: 0; }
+.receipt hr { border: none; border-top: 1px dashed #000; margin: 4px 0; }
+
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area {
+    position: absolute !important;
+    left: 0; top: 0;
+    width: auto;
+  }
+  @page { margin: var(--print-margin, 3mm); }
+}

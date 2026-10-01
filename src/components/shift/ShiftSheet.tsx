@@ -1,0 +1,157 @@
+import { useState, useEffect } from 'react'
+import { Lock, LogIn, TrendingUp, TrendingDown, ArrowDownToLine, ArrowUpFromLine, Banknote } from 'lucide-react'
+import { Modal } from '../Modal'
+import { Button, Input, Field, Spinner } from '../ui'
+import { useActiveShift, useShiftSummary, useOpenShift, useShiftCash, useCloseShift } from '../../hooks/useOrders'
+import { useSettings } from '../../hooks/useSettings'
+import { fmtID, fmtTime } from '../../lib/utils'
+import { toast } from '../../lib/toast'
+
+export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open' | 'close'; onClose: () => void }) {
+  const { settings } = useSettings()
+  const { data: shift } = useActiveShift()
+  const { data: sum } = useShiftSummary(shift?.id)
+  const { data: cash } = useShiftCash(shift?.id)
+  const openShift = useOpenShift()
+  const closeShift = useCloseShift()
+
+  const [float, setFloat] = useState('350000')
+  const [counted, setCounted] = useState('')
+
+  useEffect(() => {
+    if (open && mode === 'open' && settings?.default_float) setFloat(String(settings.default_float))
+  }, [open, mode, settings?.default_float])
+
+  const expected = (sum?.cashSales || 0) + (sum?.cashIn || 0) - (sum?.cashOut || 0) + (shift?.opening_float || 0)
+
+  const handleOpen = () => {
+    const v = Number(float) || 0
+    openShift.mutate(v, {
+      onSuccess: () => { toast.success('Shift dibuka'); onClose() },
+      onError: (e: Error) => toast.error(e.message),
+    })
+  }
+
+  const handleClose = () => {
+    if (!shift) return
+    const v = Number(counted) || 0
+    closeShift.mutate(
+      { shiftId: shift.id, counted: v },
+      {
+        onSuccess: (expectedCash: unknown) => {
+          toast.success('Shift ditutup')
+          onClose()
+          const exp = Number(expectedCash)
+          const diff = v - exp
+          if (Math.abs(diff) >= 1) toast.info(`Selisih kas: ${diff > 0 ? '+' : ''}${fmtID(diff)}`)
+        },
+        onError: (e: Error) => toast.error(e.message),
+      },
+    )
+  }
+
+  if (!open) return null
+
+  return (
+    <Modal open={open} onClose={onClose} title={mode === 'open' ? 'Buka Shift' : 'Tutup Shift'} size="sm">
+      {mode === 'open' ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-2xl bg-brand-50 p-4 dark:bg-brand-900/20">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-white" aria-hidden><LogIn size={20} /></div>
+            <div>
+              <p className="text-sm font-semibold">Mulai shift baru</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Tentukan modal awal kas drawer</p>
+            </div>
+          </div>
+          <Field label="Modal awal (float)" required>
+            <Input
+              inputMode="numeric" pattern="[0-9]*" value={float}
+              onChange={(e) => setFloat(e.target.value.replace(/\D/g, ''))}
+              placeholder="350000"
+            />
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {[50000, 100000, 350000, 500000].map((v) => (
+                <button
+                  key={v} type="button" onClick={() => setFloat(String(v))}
+                  className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  {v / 1000}rb
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Button size="lg" className="w-full" onClick={handleOpen} disabled={openShift.isPending}>
+            {openShift.isPending ? <Spinner className="text-white" /> : <LogIn size={18} aria-hidden />} Buka Shift
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {!shift ? (
+            <p className="text-sm text-slate-500">Tidak ada shift aktif.</p>
+          ) : (
+            <>
+              <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ringkasan kas</p>
+                <dl className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <dt className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400"><Banknote size={15} aria-hidden /> Modal awal</dt>
+                    <dd className="font-semibold tabular-nums">{fmtID(shift.opening_float)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400"><TrendingUp size={15} className="text-green-600" aria-hidden /> Penjualan tunai</dt>
+                    <dd className="font-semibold tabular-nums">{fmtID(sum?.cashSales || 0)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400"><ArrowDownToLine size={15} className="text-brand-600" aria-hidden /> Cash masuk</dt>
+                    <dd className="font-semibold tabular-nums">{fmtID(sum?.cashIn || 0)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400"><ArrowUpFromLine size={15} className="text-red-600" aria-hidden /> Cash keluar</dt>
+                    <dd className="font-semibold tabular-nums">{fmtID(sum?.cashOut || 0)}</dd>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-dashed pt-2 text-base">
+                    <dt className="font-bold">Kas di drawer (estimasi)</dt>
+                    <dd className="font-bold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(expected)}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              {cash && cash.length > 0 && (
+                <div className="max-h-32 space-y-1.5 overflow-y-auto" aria-label="Riwayat cash in/out">
+                  {cash.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800/60">
+                      <span className="flex items-center gap-1.5 font-medium">
+                        {c.type === 'in' ? <ArrowDownToLine size={13} className="text-brand-600" aria-hidden /> : <ArrowUpFromLine size={13} className="text-red-600" aria-hidden />}
+                        {c.type === 'in' ? 'Masuk' : 'Keluar'} {c.note ? `· ${c.note}` : ''}
+                      </span>
+                      <span className={`font-bold tabular-nums ${c.type === 'in' ? 'text-green-700 dark:text-green-400' : 'text-red-600'}`}>{c.type === 'in' ? '+' : '−'}{fmtID(c.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <Field label="Kas fisik dihitung" required hint={`Estimasi: ${fmtID(expected)}`}>
+                <Input
+                  inputMode="numeric" pattern="[0-9]*" value={counted}
+                  onChange={(e) => setCounted(e.target.value.replace(/\D/g, ''))}
+                  placeholder="0"
+                />
+                {counted !== '' && (
+                  <p className="mt-2 text-sm font-semibold" aria-live="polite">
+                    Selisih: <span className={(Number(counted) - expected) >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600'}>
+                      {(Number(counted) - expected) > 0 ? '+' : ''}{fmtID(Number(counted) - expected)}
+                    </span>
+                  </p>
+                )}
+              </Field>
+
+              <Button size="lg" variant="success" className="w-full" onClick={handleClose} disabled={closeShift.isPending || counted === ''}>
+                {closeShift.isPending ? <Spinner className="text-white" /> : <Lock size={18} aria-hidden />} Tutup Shift
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+    </Modal>
+  )
+}

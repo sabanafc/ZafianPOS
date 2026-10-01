@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="description" content="Aplikasi kasir modern untuk tablet dan ponsel: POS, laporan, menu, bahan baku, keuangan." />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Kasir" />
+    <title>Kasir POS</title>
+    <style>
+      html { background: #f8fafc; }
+      @media (prefers-color-scheme: dark) { html { background: #0f172a; } }
+      #splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 50; }
+      #splash .dot { width: 44px; height: 44px; border-radius: 9999px; border: 3px solid rgba(79,70,229,.25); border-top-color: #4f46e5; animation: spin .8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div id="splash"><div class="dot"></div></div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
