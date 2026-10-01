@@ -10,6 +10,7 @@ import { ChannelPicker } from '../components/pos/ChannelPicker'
 import { CartList } from '../components/pos/CartList'
 import { PaymentModal } from '../components/pos/PaymentModal'
 import { ReceiptDialog } from '../components/pos/Receipt'
+import { Printer } from 'lucide-react'
 import { ShiftSheet } from '../components/shift/ShiftSheet'
 import { Modal } from '../components/Modal'
 import { Button, IconButton, Badge, EmptyState } from '../components/ui'
@@ -41,6 +42,8 @@ export default function PosPage() {
   const [cartOpen, setCartOpen] = useState(false)
   const [shiftGate, setShiftGate] = useState(false)
   const [lastOrder, setLastOrder] = useState<Order | null>(null)
+  // transaksi riwayat yang sedang dilihat struknya (cetak ulang)
+  const [reprintOrder, setReprintOrder] = useState<Order | null>(null)
 
   const subtotal = lines.reduce((s, l) => s + l.price * l.qty, 0)
   const totals = calcTotals(subtotal, discount, settings)
@@ -186,21 +189,27 @@ export default function PosPage() {
       />
       <ReceiptDialog order={lastOrder} settings={settings} onClose={() => setLastOrder(null)} />
 
-      {/* Riwayat + void — dibuka dari ikon riwayat di topbar */}
+      {/* Riwayat + void — dibuka dari ikon riwayat di topbar. Ketuk transaksi untuk buka struk & cetak ulang */}
       <Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title="Riwayat Transaksi" size="lg">
         {history.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-500">Belum ada transaksi.</p>
         ) : (
           <ul className="space-y-2" aria-label="Riwayat transaksi">
             {history.map((o) => (
-              <li key={o.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-                <div className="flex items-center justify-between gap-2">
+              <li key={o.id} className="rounded-xl border border-slate-200 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                <button
+                  className="flex w-full items-center justify-between gap-2 p-3 text-left"
+                  onClick={() => { setReprintOrder(o); setHistoryOpen(false) }}
+                  aria-label={`Buka struk ${o.order_no}`}
+                >
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 truncate text-sm font-bold">
                       {o.order_no}
                       {o.status === 'void' && <Badge tone="red">Void</Badge>}
                       {isOnlineChannel(o.channel) && <Badge tone="brand">{CHANNELS.find((c) => c.id === o.channel)?.short}</Badge>}
-                    </p>
+                      {o.status === 'paid' && (
+                        <Printer size={13} className="shrink-0 text-slate-400" aria-hidden />
+                      )}                    </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       {fmtTime(o.created_at)} · {CHANNELS.find((c) => c.id === o.channel)?.label} · {o.items?.length || 0} item
                       {o.payment_method ? ` · ${o.payment_method}` : ''}
@@ -211,7 +220,8 @@ export default function PosPage() {
                     {o.status === 'paid' && (
                       <IconButton
                         label={`Void ${o.order_no}`} size="sm" variant="ghost" className="text-red-500"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           if (confirm(`Void transaksi ${o.order_no}?`)) {
                             voidOrder.mutate(o.id, { onSuccess: () => toast.success('Transaksi di-void') })
                           }
@@ -221,12 +231,15 @@ export default function PosPage() {
                       </IconButton>
                     )}
                   </div>
-                </div>
+                </button>
               </li>
             ))}
           </ul>
         )}
       </Modal>
+
+      {/* Struk cetak ulang dari riwayat */}
+      <ReceiptDialog order={reprintOrder} settings={settings} reprint onClose={() => setReprintOrder(null)} />
     </div>
   )
 }

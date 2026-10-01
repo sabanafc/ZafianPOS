@@ -75,19 +75,20 @@ export function Receipt({ order, settings, items }: { order: Order; settings?: S
   )
 }
 
-/** Dialog sukses pembayaran: preview struk + tombol cetak (Bluetooth/browser) */
-export function ReceiptDialog({ order, settings, onClose }: { order: Order | null; settings?: Settings | null; onClose: () => void }) {
+/** Dialog sukses pembayaran: preview struk + tombol cetak (Bluetooth/browser).
+ *  reprint=true → dipakai untuk cetak ulang dari riwayat (tanpa auto-print). */
+export function ReceiptDialog({ order, settings, onClose, reprint = false }: { order: Order | null; settings?: Settings | null; onClose: () => void; reprint?: boolean }) {
   const printed = useRef(false)
   const bt = useBtPrinter()
   const [busyBt, setBusyBt] = useState(false)
 
   useEffect(() => {
-    if (order && !printed.current && settings?.auto_print && bt.connected) {
+    if (order && !reprint && !printed.current && settings?.auto_print && bt.connected) {
       printed.current = true
       doBtPrint().catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [order?.id, settings?.auto_print, bt.connected])
+  }, [order?.id, reprint, settings?.auto_print, bt.connected])
 
   if (!order) return null
 
@@ -131,7 +132,9 @@ export function ReceiptDialog({ order, settings, onClose }: { order: Order | nul
       <div className="relative flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-pop animate-scale-in dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
           <div>
-            <p className="font-bold text-green-700 dark:text-green-400">Transaksi berhasil</p>
+            <p className={`font-bold ${reprint ? 'text-brand-700 dark:text-brand-300' : 'text-green-700 dark:text-green-400'}`}>
+              {reprint ? 'Cetak ulang struk' : 'Transaksi berhasil'}
+            </p>
             <p className="text-xs text-slate-500">{order.order_no}</p>
           </div>
           {bt.connected ? (
@@ -150,7 +153,7 @@ export function ReceiptDialog({ order, settings, onClose }: { order: Order | nul
           </div>
         </div>
         <div className="border-t border-slate-200 p-4 dark:border-slate-800">
-          <Button className="w-full" size="lg" onClick={onClose}>Selesai</Button>
+          <Button className="w-full" size="lg" onClick={onClose}>{reprint ? 'Tutup' : 'Selesai'}</Button>
         </div>
       </div>
     </div>
