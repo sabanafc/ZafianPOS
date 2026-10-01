@@ -10,7 +10,7 @@ import { Button, IconButton, Spinner } from './ui'
 import { toast } from '../lib/toast'
 import { ShiftSheet } from './shift/ShiftSheet'
 import { CashSheet } from './shift/CashSheet'
-import { TestPrint } from './shift/TestPrint'
+import { PrinterSheet, useBtPrinter } from './shift/PrinterSheet'
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -26,8 +26,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { data: shift, isLoading } = useActiveShift()
   const [shiftSheet, setShiftSheet] = useState<'open' | 'close' | null>(null)
   const [cashSheet, setCashSheet] = useState<'in' | 'out' | null>(null)
-  const [showTestPrint, setShowTestPrint] = useState(false)
+  const [showPrinter, setShowPrinter] = useState(false)
   const closeShift = useCloseShift()
+  const bt = useBtPrinter()
 
   const handleCloseShift = (counted: number) => {
     if (!shift) return
@@ -92,9 +93,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     Shift aktif
                   </span>
                 )}
-                {/* Reconnect / test print — tanpa perlu ke Pengaturan */}
-                <IconButton label="Printer: tes cetak & kalibrasi" variant="secondary" onClick={() => setShowTestPrint(true)}>
+                {/* Printer Bluetooth: pairing, status, test print — tanpa perlu ke Pengaturan */}
+                <IconButton
+                  label={bt.connected ? `Printer: ${bt.name} — buka dialog` : 'Printer: hubungkan Bluetooth'}
+                  variant={bt.connected ? 'success' : 'secondary'}
+                  onClick={() => setShowPrinter(true)}
+                >
                   <Printer size={18} aria-hidden />
+                  {bt.connected && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-slate-900" aria-hidden />}
                 </IconButton>
                 {shift && (
                   <>
@@ -147,15 +153,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <ShiftSheet mode={shiftSheet === 'close' ? 'close' : 'open'} open={shiftSheet !== null} onClose={() => setShiftSheet(null)} />
       <CashSheet mode={cashSheet === 'out' ? 'out' : 'in'} open={cashSheet !== null} onClose={() => setCashSheet(null)} onSwitchMode={(m) => setCashSheet(m)} />
 
-      {/* Test print overlay */}
-      {showTestPrint && settings && (
-        <div className="fixed inset-0 z-[85] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Tes printer">
-          <button aria-label="Tutup" className="absolute inset-0 bg-slate-950/50 animate-overlay" onClick={() => setShowTestPrint(false)} />
-          <div className="relative w-full max-w-md rounded-3xl bg-white p-5 shadow-pop animate-scale-in dark:bg-slate-900">
-            <TestPrint settings={settings} />
-            <Button variant="secondary" className="mt-3 w-full" onClick={() => setShowTestPrint(false)}>Tutup</Button>
-          </div>
-        </div>
+      {/* Dialog printer Bluetooth */}
+      {showPrinter && settings && (
+        <PrinterSheet open={showPrinter} onClose={() => setShowPrinter(false)} settings={settings} />
       )}
     </div>
   )

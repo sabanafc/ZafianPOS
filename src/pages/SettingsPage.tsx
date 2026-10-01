@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Store, Receipt, PiggyBank, Moon, Download, Database, Printer, RotateCw } from 'lucide-react'
+import { Store, Receipt, PiggyBank, Moon, Download, Database, Printer, RotateCw, Bluetooth } from 'lucide-react'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
 import { useProducts, useIngredients } from '../hooks/useMaster'
 import { useOrdersAll } from '../hooks/useOrders'
@@ -9,9 +9,13 @@ import { downloadCSV } from '../lib/csv'
 import { toast } from '../lib/toast'
 import { isConfigured } from '../lib/supabase'
 import { TestPrint } from '../components/shift/TestPrint'
+import { PrinterSheet } from '../components/shift/PrinterSheet'
 import type { Settings } from '../types'
 
 type Tab = 'bisnis' | 'struk' | 'shift' | 'tampilan' | 'data'
+
+// tab struk butuh state dialog printer
+let openPrinterDialog: (() => void) | null = null
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof Store }> = [
   { id: 'bisnis', label: 'Bisnis', icon: Store },
@@ -25,6 +29,8 @@ export default function SettingsPage() {
   const { settings, loading } = useSettings()
   const update = useUpdateSettings()
   const [tab, setTab] = useState<Tab>('bisnis')
+  const [printerOpen, setPrinterOpen] = useState(false)
+  openPrinterDialog = () => setPrinterOpen(true)
 
   if (!isConfigured) return <NotConfigured />
   if (loading || !settings) return <div className="flex justify-center py-20"><Spinner /></div>
@@ -49,10 +55,14 @@ export default function SettingsPage() {
       </div>
 
       {tab === 'bisnis' && <BusinessTab settings={settings} save={save} />}
-      {tab === 'struk' && <ReceiptTab settings={settings} save={save} />}
+      {tab === 'struk' && <ReceiptTab settings={settings} save={save} onOpenPrinter={() => setPrinterOpen(true)} />}
       {tab === 'shift' && <ShiftTab settings={settings} save={save} />}
       {tab === 'tampilan' && <DisplayTab settings={settings} save={save} />}
       {tab === 'data' && <DataCard />}
+
+      {printerOpen && settings && (
+        <PrinterSheet open={printerOpen} onClose={() => setPrinterOpen(false)} settings={settings} />
+      )}
     </Page>
   )
 }type Saver = (patch: Partial<Settings>, msg: string) => void
@@ -90,7 +100,7 @@ function BusinessTab({ settings, save }: { settings: Settings; save: Saver }) {
   )
 }
 
-function ReceiptTab({ settings, save }: { settings: Settings; save: Saver }) {
+function ReceiptTab({ settings, save, onOpenPrinter }: { settings: Settings; save: Saver; onOpenPrinter: () => void }) {
   const [footer, setFooter] = useState(settings.receipt_footer || '')
   const [promo, setPromo] = useState(settings.promo_text || '')
   const [margin, setMargin] = useState(String(settings.print_margin_mm ?? 3))
@@ -132,6 +142,10 @@ function ReceiptTab({ settings, save }: { settings: Settings; save: Saver }) {
             <Switch checked={settings.auto_print} onChange={(v) => save({ auto_print: v }, v ? 'Cetak otomatis aktif' : 'Cetak otomatis mati')} label="Cetak otomatis" />
           </div>
           <TestPrint settings={settings} />
+          <Button variant="secondary" className="w-full" onClick={onOpenPrinter}>
+            <Bluetooth size={16} aria-hidden /> Hubungkan / Kelola Printer Bluetooth
+          </Button>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Printer thermal ESC/POS via Web Bluetooth (Chrome Android/desktop). Auto print mencetak langsung ke printer BT yang terhubung.</p>
         </div>
       </Card>
 
