@@ -44,8 +44,8 @@ export function ProductGrid({ products, categories, activeCat, onCat, onPick }: 
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      {/* Tab kategori — grid 2 kolom, pindah baris otomatis tanpa scroll horizontal */}
-      <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Kategori">
+      {/* Tab kategori */}
+      <div className="flex gap-2 overflow-x-auto no-scrollbar" role="tablist" aria-label="Kategori">
         <CatTab id="all" label="Semua" active={activeCat === 'all'} onClick={() => onCat('all')} count={products.length} />
         {categories.filter((c) => c.is_active).map((c) => (
           <CatTab
@@ -114,14 +114,14 @@ function CatTab({ id, label, active, onClick, count }: { id: string; label: stri
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`flex h-10 min-w-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold transition-colors ${
+      className={`flex h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-colors ${
         active
           ? 'bg-brand-600 text-white'
           : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'
       }`}
     >
-      <span className="truncate">{label}</span>
-      <span className={`shrink-0 rounded-full px-1.5 text-[11px] font-bold ${active ? 'bg-white/20' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+      {label}
+      <span className={`rounded-full px-1.5 text-[11px] font-bold ${active ? 'bg-white/20' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
         {count}
       </span>
     </button>
