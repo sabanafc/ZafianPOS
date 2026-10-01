@@ -111,31 +111,37 @@ export default function PosPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Baris channel pesanan — full width */}
-      <div className="px-4 pt-3 md:px-6 md:pt-4" style={{ paddingTop: 'max(0.75rem, var(--sat))' }}>
-        <ChannelPicker value={channel} onChange={setChannel} />
-      </div>
-
-      {/* Konten: grid + keranjang (keranjang hanya tampil di layar lebar) */}
-      <div className="flex min-h-0 flex-1 gap-4 p-4 md:p-6">
+      <div className="flex min-h-0 flex-1">
+        {/* Kolom kiri: channel + grid produk */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {pLoading ? (
-            <div className="flex flex-1 items-center justify-center"><Loader2 className="animate-spin text-brand-600" size={28} aria-label="Memuat menu" /></div>
-          ) : activeProducts.length === 0 ? (
-            <EmptyState icon={<CartIcon size={24} />} title="Belum ada menu" subtitle="Tambahkan menu di halaman Menu & Kategori" />
-          ) : (
-            <ProductGrid
-              products={activeProducts}
-              categories={categories}
-              activeCat={cat}
-              onCat={setCat}
-              onPick={pick}
-            />
-          )}
+          {/* Baris channel pesanan */}
+          <div className="px-4 pt-3 md:px-6 md:pt-4" style={{ paddingTop: 'max(0.75rem, var(--sat))' }}>
+            <ChannelPicker value={channel} onChange={setChannel} />
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col p-4 md:p-6">
+            {pLoading ? (
+              <div className="flex flex-1 items-center justify-center"><Loader2 className="animate-spin text-brand-600" size={28} aria-label="Memuat menu" /></div>
+            ) : activeProducts.length === 0 ? (
+              <EmptyState icon={<CartIcon size={24} />} title="Belum ada menu" subtitle="Tambahkan menu di halaman Menu & Kategori" />
+            ) : (
+              <ProductGrid
+                products={activeProducts}
+                categories={categories}
+                activeCat={cat}
+                onCat={setCat}
+                onPick={pick}
+              />
+            )}
+          </div>
         </div>
 
-        {/* Panel keranjang — hanya layar lebar (tablet landscape/desktop) */}
-        <aside className="hidden w-[320px] shrink-0 flex-col rounded-2xl border border-slate-200 bg-slate-50 p-3 xl:w-[370px] lg:flex dark:border-slate-800 dark:bg-slate-900" aria-label="Keranjang">
+        {/* Panel keranjang — full height dari batas topbar, menyatu dengan garis topbar */}
+        <aside
+          className="hidden w-[320px] shrink-0 flex-col border-l border-slate-200 bg-slate-50 p-3 xl:w-[370px] lg:flex dark:border-slate-800 dark:bg-slate-900"
+          style={{ paddingBottom: 'max(0.75rem, var(--sab, 0px))' }}
+          aria-label="Keranjang"
+        >
           <CartList
             lines={lines} discount={discount} settings={settings} held={held} online={online}
             onQty={setQty} onRemove={remove} onDiscount={setDiscount}
