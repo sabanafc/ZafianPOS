@@ -33,6 +33,8 @@ export function PaymentModal({ open, total, isOnlineRecording = false, onClose, 
   }
 
   const submit = () => {
+    // Pesanan online (GoFood/GrabFood/ShopeeFood): hanya dicatat, tanpa pembayaran
+    if (isOnlineRecording) return onDone('cash', total)
     if (method !== 'cash') return onDone(method, total)
     if (!enough) return
     onDone('cash', Number(paid))
