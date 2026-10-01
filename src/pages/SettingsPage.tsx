@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { Store, Receipt, PiggyBank, Moon, Download, Upload, Database, Printer, RotateCw, Bluetooth, FileDown } from 'lucide-react'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
-import { useProducts, useIngredients, useCategories, useImportProducts, useImportIngredients } from '../hooks/useMaster'
+import { useProducts, useIngredients, useCategories, useAllRecipes, useImportProducts, useImportIngredients, useImportRecipes } from '../hooks/useMaster'
 import { useOrdersAll } from '../hooks/useOrders'
 import { Page, Card, Input, Field, Switch, Spinner, Button } from '../components/ui'
 import { Modal } from '../components/Modal'
@@ -201,11 +201,13 @@ function DataCard() {
   const { data: products = [] } = useProducts()
   const { data: ingredients = [] } = useIngredients()
   const { data: categories = [] } = useCategories()
+  const { data: recipes = [] } = useAllRecipes()
   const importProducts = useImportProducts()
   const importIngredients = useImportIngredients()
+  const importRecipes = useImportRecipes()
   const fileRef = useRef<HTMLInputElement>(null)
-  const kindRef = useRef<'products' | 'ingredients'>('products')
-  const [preview, setPreview] = useState<{ kind: 'products' | 'ingredients'; name: string; rows: string[][] } | null>(null)
+  const kindRef = useRef<'products' | 'ingredients' | 'recipes'>('products')
+  const [preview, setPreview] = useState<{ kind: 'products' | 'ingredients' | 'recipes'; name: string; rows: string[][] } | null>(null)
 
   const exportOrders = () => {
     downloadCSV('transaksi.csv', [
@@ -228,9 +230,18 @@ function DataCard() {
     ])
     toast.success('Bahan baku diekspor')
   }
+  const exportRecipes = () => {
+    downloadCSV('resep.csv', [
+      ['Menu', 'Bahan', 'Jumlah'],
+      ...recipes
+        .map((r) => [products.find((p) => p.id === r.product_id)?.name ?? '', r.ingredient?.name ?? '', r.qty])
+        .filter((r) => r[0] && r[1]),
+    ])
+    toast.success('Resep diekspor')
+  }
 
   // ---------- Import CSV ----------
-  const openImport = (kind: 'products' | 'ingredients') => {
+  const openImport = (kind: 'products' | 'ingredients' | 'recipes') => {
     kindRef.current = kind
     fileRef.current?.click()
   }
@@ -259,14 +270,26 @@ function DataCard() {
     purchase_qty: num(r[6] || '') || 1,
     cost_per_unit: num(r[7] || ''),
   })
+  const mapRecipeRow = (r: string[]) => ({
+    product: (r[0] || '').trim(),
+    ingredient: (r[1] || '').trim(),
+    qty: num(r[2] || ''),
+  })
 
   const prodRows = preview?.kind === 'products' ? preview.rows.slice(1).map(mapProductRow) : []
   const ingRows = preview?.kind === 'ingredients' ? preview.rows.slice(1).map(mapIngredientRow) : []
+  const recRows = preview?.kind === 'recipes' ? preview.rows.slice(1).map(mapRecipeRow) : []
   const validProd = prodRows.filter((r) => r.name && r.price > 0)
   const validIng = ingRows.filter((r) => r.name && r.unit)
-  const totalRows = prodRows.length + ingRows.length
-  const validCount = validProd.length + validIng.length
+  const validRec = recRows.filter((r) => r.product && r.ingredient && r.qty > 0)
+  const totalRows = prodRows.length + ingRows.length + recRows.length
+  const validCount = validProd.length + validIng.length + validRec.length
   const header = preview?.rows[0] || []
+  const skippedReason = preview?.kind === 'products'
+    ? 'nama kosong atau harga nol'
+    : preview?.kind === 'recipes'
+      ? 'nama menu/bahan kosong atau jumlah nol'
+      : 'nama kosong'
 
   const doImport = () => {
     if (!preview) return
@@ -276,13 +299,32 @@ function DataCard() {
     }
     const fail = (e: Error) => toast.error(`Import gagal: ${e.message}`)
     if (preview.kind === 'products') importProducts.mutate(validProd, { onSuccess: done, onError: fail })
-    else importIngredients.mutate(validIng, { onSuccess: done, onError: fail })
+    else if (preview.kind === 'ingredients') importIngredients.mutate(validIng, { onSuccess: done, onError: fail })
+    else
+      importRecipes.mutate(validRec, {
+        onSuccess: (res) => {
+          toast.success(`Resep diimport: ${res.updated} menu, ${res.inserted} baris bahan`)
+          if (res.missing.length) {
+            toast.info(`Dilewati (tidak dikenal): ${res.missing.slice(0, 3).join(', ')}${res.missing.length > 3 ? ` +${res.missing.length - 3} lainnya` : ''}`)
+          }
+          setPreview(null)
+        },
+        onError: fail,
+      })
   }
 
   const tplProducts = () =>
     downloadCSV('template-produk.csv', [['Nama', 'Harga', 'Kategori', 'Aktif'], ['Es Kopi Susu', '18000', 'Minuman', 'ya']])
   const tplIngredients = () =>
     downloadCSV('template-bahan.csv', [['Nama', 'Satuan resep', 'Stok', 'Min', 'Harga beli', 'Satuan beli', 'Isi', 'HPP/satuan'], ['Susu UHT', 'ml', '5000', '500', '25000', 'pack', '1000', '']])
+  const tplRecipes = () =>
+    downloadCSV('template-resep.csv', [
+      ['Menu', 'Bahan', 'Jumlah'],
+      ['Es Kopi Susu', 'Susu UHT', '150'],
+      ['Es Kopi Susu', 'Gula Cair', '20'],
+      ['Es Kopi Susu', 'Es Batu', '100'],
+    ])
+  const pendingImport = importProducts.isPending || importIngredients.isPending || importRecipes.isPending
 
   return (
     <Card className="max-w-3xl p-5">
@@ -291,21 +333,26 @@ function DataCard() {
         <Button variant="secondary" onClick={exportOrders}><Download size={16} aria-hidden /> Transaksi</Button>
         <Button variant="secondary" onClick={exportProducts}><Download size={16} aria-hidden /> Produk</Button>
         <Button variant="secondary" onClick={exportIngredients}><Download size={16} aria-hidden /> Bahan Baku</Button>
+        <Button variant="secondary" onClick={exportRecipes}><Download size={16} aria-hidden /> Resep</Button>
       </div>
       <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Data tersimpan aman di Supabase. Ekspor CSV berkala sebagai cadangan tambahan.</p>
 
       <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
         <h3 className="mb-2 flex items-center gap-2 text-sm font-bold"><Upload size={15} aria-hidden /> Import CSV</h3>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => openImport('products')} disabled={importProducts.isPending || importIngredients.isPending}><Upload size={16} aria-hidden /> Produk</Button>
-          <Button variant="secondary" onClick={() => openImport('ingredients')} disabled={importProducts.isPending || importIngredients.isPending}><Upload size={16} aria-hidden /> Bahan Baku</Button>
+          <Button variant="secondary" onClick={() => openImport('products')} disabled={pendingImport}><Upload size={16} aria-hidden /> Produk</Button>
+          <Button variant="secondary" onClick={() => openImport('ingredients')} disabled={pendingImport}><Upload size={16} aria-hidden /> Bahan Baku</Button>
+          <Button variant="secondary" onClick={() => openImport('recipes')} disabled={pendingImport}><Upload size={16} aria-hidden /> Resep</Button>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
           <span className="flex items-center gap-1"><FileDown size={13} aria-hidden /> Template:</span>
           <button className="font-semibold text-brand-600 underline-offset-2 hover:underline dark:text-brand-400" onClick={tplProducts}>produk</button>
           <button className="font-semibold text-brand-600 underline-offset-2 hover:underline dark:text-brand-400" onClick={tplIngredients}>bahan baku</button>
+          <button className="font-semibold text-brand-600 underline-offset-2 hover:underline dark:text-brand-400" onClick={tplRecipes}>resep</button>
         </div>
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Nama yang sama dalam CSV akan memperbarui data yang sudah ada — aman dijalankan berulang. Delimiter koma atau titik-koma.</p>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          Nama yang sama dalam CSV akan memperbarui data yang sudah ada — aman dijalankan berulang. Import resep mengganti seluruh bahan pada menu yang ada di CSV (satuan jumlah mengikuti satuan resep bahan). Delimiter koma atau titik-koma.
+        </p>
       </div>
 
       <input ref={fileRef} type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={onFile} aria-hidden />
@@ -314,11 +361,11 @@ function DataCard() {
       <Modal
         open={!!preview}
         onClose={() => setPreview(null)}
-        title={preview?.kind === 'products' ? 'Import Produk' : 'Import Bahan Baku'}
+        title={preview?.kind === 'products' ? 'Import Produk' : preview?.kind === 'recipes' ? 'Import Resep' : 'Import Bahan Baku'}
         footer={
           <div className="flex gap-2">
             <Button variant="secondary" className="flex-1" onClick={() => setPreview(null)}>Batal</Button>
-            <Button className="flex-[2]" onClick={doImport} disabled={!validCount || importProducts.isPending || importIngredients.isPending}>
+            <Button className="flex-[2]" onClick={doImport} disabled={!validCount || pendingImport}>
               Import {validCount} baris
             </Button>
           </div>
@@ -328,6 +375,11 @@ function DataCard() {
           <p className="text-sm text-slate-500 dark:text-slate-400">
             {preview?.name} — {totalRows} baris data, {validCount} siap diimport.
           </p>
+          {preview?.kind === 'recipes' && (
+            <p className="rounded-xl bg-brand-50 px-3 py-2 text-xs font-medium text-brand-800 dark:bg-brand-900/30 dark:text-brand-200">
+              Import resep mengganti seluruh bahan pada menu yang tercantum di CSV. Menu atau bahan yang tidak dikenal dilewati.
+            </p>
+          )}
           <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 dark:border-slate-800">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
@@ -345,7 +397,7 @@ function DataCard() {
           {totalRows > 7 && <p className="text-xs text-slate-400">… {totalRows - 7} baris lainnya</p>}
           {totalRows - validCount > 0 && (
             <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200" role="alert">
-              {totalRows - validCount} baris dilewati (nama kosong atau harga nol).
+              {totalRows - validCount} baris dilewati ({skippedReason}).
             </p>
           )}
         </div>

@@ -219,6 +219,54 @@ export function useImportIngredients() {
   })
 }
 
+/** Import resep (BOM) per menu: baris "menu, bahan, jumlah". Resep menu
+ *  yang ada di CSV diganti seluruhnya; menu/bahan tak dikenal dilewati. */
+export function useImportRecipes() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (rows: Array<{ product: string; ingredient: string; qty: number }>): Promise<ImportResult & { missing: string[] }> => {
+      const [prodRes, ingRes] = await Promise.all([
+        supabase.from('products').select('id, name'),
+        supabase.from('ingredients').select('id, name'),
+      ])
+      if (prodRes.error) throw prodRes.error
+      if (ingRes.error) throw ingRes.error
+      const pMap = new Map((prodRes.data as Array<{ id: string; name: string }>).map((p) => [p.name.trim().toLowerCase(), p.id]))
+      const iMap = new Map((ingRes.data as Array<{ id: string; name: string }>).map((i) => [i.name.trim().toLowerCase(), i.id]))
+
+      const missing = new Set<string>()
+      const byProduct = new Map<string, Map<string, number>>() // productId -> ingredientId -> total qty
+      for (const r of rows) {
+        const pid = pMap.get(r.product.trim().toLowerCase())
+        const iid = iMap.get(r.ingredient.trim().toLowerCase())
+        if (!pid) { missing.add(`menu "${r.product}"`); continue }
+        if (!iid) { missing.add(`bahan "${r.ingredient}"`); continue }
+        if (!byProduct.has(pid)) byProduct.set(pid, new Map())
+        const m = byProduct.get(pid)! // jumlah duplikat dijumlahkan
+        m.set(iid, (m.get(iid) || 0) + r.qty)
+      }
+
+      let inserted = 0, updated = 0
+      for (const [pid, items] of byProduct) {
+        const { error: delErr } = await supabase.from('recipe_items').delete().eq('product_id', pid)
+        if (delErr) throw delErr
+        const payload = [...items.entries()].map(([ingredient_id, qty]) => ({ product_id: pid, ingredient_id, qty }))
+        if (payload.length) {
+          const { error: insErr } = await supabase.from('recipe_items').insert(payload)
+          if (insErr) throw insErr
+          inserted += payload.length
+        }
+        updated++
+      }
+      return { inserted, updated, missing: [...missing] }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recipes'] })
+      qc.invalidateQueries({ queryKey: ['recipe-all'] })
+    },
+  })
+}
+
 // ---------- Bahan baku ----------
 export function useIngredients() {
   return useQuery({
