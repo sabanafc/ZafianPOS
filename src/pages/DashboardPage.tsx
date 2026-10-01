@@ -64,23 +64,40 @@ export default function DashboardPage() {
   const trnPct = pct(trxCount, prevTrx)
   const prfPct = pct(profit, prevProfit)
 
-  // chart per hari
-  const chart = useMemo(() => {
-    const map = new Map<string, number>()
+  // Grafik dinamis: per jam (hari ini/kemarin), per hari (7 hari), per minggu (30 hari)
+  const chart = useMemo<Array<[string, number]>>(() => {
+    if (period === 'today' || period === 'yesterday') {
+      const byHour = new Map<number, number>()
+      for (let h = 0; h < 24; h++) byHour.set(h, 0)
+      for (const o of paid) {
+        const h = new Date(o.created_at).getHours()
+        byHour.set(h, (byHour.get(h) || 0) + o.total)
+      }
+      return Array.from(byHour.entries()).map(([h, v]) => [String(h).padStart(2, '0'), v] as [string, number])
+    }
+    const byDay = new Map<string, number>()
+    for (const o of paid) byDay.set(o.created_at.slice(0, 10), (byDay.get(o.created_at.slice(0, 10)) || 0) + o.total)
     const start = from.slice(0, 10), end = to.slice(0, 10)
+    const days: string[] = []
     let d = new Date(start)
     const endD = new Date(end)
     while (d <= endD) {
       const tz = d.getTimezoneOffset()
-      map.set(new Date(d.getTime() - tz * 60000).toISOString().slice(0, 10), 0)
+      days.push(new Date(d.getTime() - tz * 60000).toISOString().slice(0, 10))
       d.setDate(d.getDate() + 1)
     }
-    for (const o of paid) {
-      const k = o.created_at.slice(0, 10)
-      if (map.has(k)) map.set(k, (map.get(k) || 0) + o.total)
+    if ((period as number) <= 7) {
+      return days.map((k) => [k, byDay.get(k) || 0] as [string, number])
     }
-    return Array.from(map.entries())
-  }, [paid, from, to])
+    // 30 hari → per minggu (7 hari per batang)
+    const weeks: Array<[string, number]> = []
+    days.forEach((k, i) => {
+      if (i % 7 === 0) weeks.push([k, 0])
+      weeks[weeks.length - 1][1] += byDay.get(k) || 0
+    })
+    return weeks
+  }, [paid, from, to, period])
+  const unit = period === 'today' || period === 'yesterday' ? 'jam' : (period as number) <= 7 ? 'hari' : 'minggu'
   const maxVal = Math.max(1, ...chart.map(([, v]) => v))
 
   // channel breakdown
@@ -160,13 +177,13 @@ export default function DashboardPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             {/* Grafik */}
             <Card className="p-4">
-              <h2 className="mb-3 text-sm font-bold">Penjualan {label.toLowerCase()}</h2>
-              <div className="flex h-40 items-end gap-1.5" role="img" aria-label={`Grafik penjualan ${label}`}>
-                {chart.map(([d, v]) => (
-                  <div key={d} className="group flex min-w-0 flex-1 flex-col items-center gap-1">
+              <h2 className="mb-3 text-sm font-bold">Penjualan {label.toLowerCase()} <span className="font-medium text-slate-400 dark:text-slate-500">· per {unit}</span></h2>
+              <div className="flex h-40 items-end gap-1.5" role="img" aria-label={`Grafik penjualan ${label} per ${unit}`}>
+                {chart.map(([k, v]) => (
+                  <div key={k} className="group flex min-w-0 flex-1 flex-col items-center gap-1">
                     <span className="text-[9px] font-semibold tabular-nums text-slate-400 opacity-0 group-hover:opacity-100">{v > 0 ? fmtIDShort(v).replace('Rp ', '') : ''}</span>
                     <div className="w-full rounded-t-md bg-brand-500 transition-all group-hover:bg-brand-600 dark:bg-brand-600" style={{ height: `${Math.max(3, (v / maxVal) * 100)}%` }} />
-                    <span className="text-[9px] text-slate-400">{d.slice(8)}/{d.slice(5, 7)}</span>
+                    <span className="text-[9px] text-slate-400">{unit === 'jam' ? k : `${k.slice(8)}/${k.slice(5, 7)}`}</span>
                   </div>
                 ))}
               </div>
