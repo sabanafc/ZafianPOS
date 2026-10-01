@@ -5,7 +5,8 @@ export interface Category { id: string; name: string; sort_order: number; is_act
 export interface Product { id: string; category_id: string | null; name: string; price: number; image_url: string | null; is_active: boolean }
 export interface Ingredient {
   id: string; name: string; unit: string; stock: number; min_stock: number; cost_per_unit: number
-  purchase_unit: string | null; purchase_qty: number | null; purchase_price: number | null; is_active: boolean
+  purchase_unit: string | null; purchase_qty: number | null; purchase_price: number | null
+  low_stock_alert: boolean; is_active: boolean
 }
 export interface RecipeItem { id: string; product_id: string; ingredient_id: string; qty: number; ingredient?: Ingredient }
 export interface Shift {

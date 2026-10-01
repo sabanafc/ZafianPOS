@@ -5,6 +5,7 @@ import {
   Lock, LogIn, Coins, Printer, History,
 } from 'lucide-react'
 import { useActiveShift, useCloseShift } from '../hooks/useOrders'
+import { useStockAlerts } from '../hooks/useStockAlerts'
 import { useSettings } from '../hooks/useSettings'
 import { useUiStore } from '../store/pos'
 import { Button, IconButton, Spinner } from './ui'
@@ -24,6 +25,7 @@ const NAV = [
 ]
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  useStockAlerts()
   const { settings } = useSettings()
   const { data: shift, isLoading } = useActiveShift()
   const [shiftSheet, setShiftSheet] = useState<'open' | 'close' | null>(null)

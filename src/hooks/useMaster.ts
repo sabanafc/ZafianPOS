@@ -141,6 +141,10 @@ export function useSaveIngredient() {
       const payload = {
         name: i.name, unit: i.unit || 'pcs', stock: i.stock || 0,
         min_stock: i.min_stock || 0, cost_per_unit: i.cost_per_unit || 0,
+        purchase_unit: i.purchase_unit || i.unit || 'pcs',
+        purchase_qty: i.purchase_qty || 1,
+        purchase_price: i.purchase_price || 0,
+        low_stock_alert: i.low_stock_alert ?? true,
         is_active: i.is_active ?? true,
       }
       const { error } = i.id
@@ -181,6 +185,18 @@ export function useToggleIngredient() {
       qc.invalidateQueries({ queryKey: ['ingredients'] })
       qc.invalidateQueries({ queryKey: ['recipe-all'] })
     },
+  })
+}
+
+/** Toggle notifikasi stok menipis per bahan */
+export function useToggleStockAlert() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, low_stock_alert }: { id: string; low_stock_alert: boolean }) => {
+      const { error } = await supabase.from('ingredients').update({ low_stock_alert }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ingredients'] }),
   })
 }
 

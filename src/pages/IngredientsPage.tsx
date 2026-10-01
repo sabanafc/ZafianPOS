@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Plus, Pencil, Trash2, Package, ArrowDownToLine, ArrowUpFromLine, Scale, History, AlertTriangle, Calculator } from 'lucide-react'
-import { useIngredients, useSaveIngredient, useDeleteIngredient, useAdjustStock, useToggleIngredient } from '../hooks/useMaster'
+import { Plus, Pencil, Trash2, Package, ArrowDownToLine, ArrowUpFromLine, Scale, History, AlertTriangle, Calculator, Bell, BellOff, ArrowRightLeft } from 'lucide-react'
+import { useIngredients, useSaveIngredient, useDeleteIngredient, useAdjustStock, useToggleIngredient, useToggleStockAlert } from '../hooks/useMaster'
 import { useStockMovements } from '../hooks/useOrders'
 import type { Ingredient } from '../types'
 import { Page, Card, Button, IconButton, Input, Select, Field, Badge, EmptyState, Switch, ConfirmDialog, Spinner } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { fmtID, fmtQty, fmtDateTime, num } from '../lib/utils'
-import { ALL_UNITS, VOLUME_UNITS, WEIGHT_UNITS, costPerRecipeUnit, sameFamily } from '../lib/units'
+import { ALL_UNITS, VOLUME_UNITS, WEIGHT_UNITS, costPerRecipeUnit, sameFamily, convertPurchaseToRecipe } from '../lib/units'
 import { toast } from '../lib/toast'
 
 export default function IngredientsPage() {
@@ -14,6 +14,7 @@ export default function IngredientsPage() {
   const { data: moves = [] } = useStockMovements()
   const del = useDeleteIngredient()
   const toggle = useToggleIngredient()
+  const toggleAlert = useToggleStockAlert()
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
   const [adjusting, setAdjusting] = useState<{ ing: Ingredient; mode: 'in' | 'out' } | null>(null)
   const [opnameFor, setOpnameFor] = useState<Ingredient | null>(null)
@@ -48,6 +49,9 @@ export default function IngredientsPage() {
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Daftar bahan baku">
           {ingredients.map((i) => {
             const low = i.stock <= i.min_stock
+            const converted = i.purchase_unit && i.purchase_unit !== i.unit
+              ? convertPurchaseToRecipe(i.purchase_qty || 1, i.purchase_unit, i.unit)
+              : null
             return (
               <li key={i.id}>
                 <Card className={`p-4 ${!i.is_active ? 'opacity-60' : ''}`}>
@@ -57,6 +61,12 @@ export default function IngredientsPage() {
                       <p className="text-xs text-slate-500 dark:text-slate-400">
                         {i.purchase_price ? `${fmtID(i.purchase_price)} / ${fmtQty(i.purchase_qty || 1)} ${i.purchase_unit}` : `${fmtID(i.cost_per_unit)} / ${i.unit}`}
                       </p>
+                      {converted !== null && (
+                        <p className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+                          <ArrowRightLeft size={11} aria-hidden />
+                          {fmtQty(i.purchase_qty || 1)} {i.purchase_unit} = {fmtQty(converted)} {i.unit}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5">
                       {low && <Badge tone="red">Kritis</Badge>}
@@ -69,6 +79,16 @@ export default function IngredientsPage() {
                       <p className="text-xs text-slate-500 dark:text-slate-400">min. {fmtQty(i.min_stock)} {i.unit} · HPP {fmtID(i.cost_per_unit)}/{i.unit}</p>
                     </div>
                     <div className="flex gap-1">
+                      <IconButton
+                        label={i.low_stock_alert ? `Notifikasi stok aktif: ${i.name}` : `Notifikasi stok mati: ${i.name}`}
+                        size="sm" variant={i.low_stock_alert ? 'success' : 'ghost'}
+                        className={i.low_stock_alert ? '' : 'text-slate-400'}
+                        onClick={() => toggleAlert.mutate({ id: i.id, low_stock_alert: !i.low_stock_alert }, {
+                          onSuccess: () => toast.info(i.low_stock_alert ? `Notifikasi ${i.name} dimatikan` : `Notifikasi ${i.name} dinyalakan`),
+                        })}
+                      >
+                        {i.low_stock_alert ? <Bell size={15} aria-hidden /> : <BellOff size={15} aria-hidden />}
+                      </IconButton>
                       <IconButton label={`Stok masuk ${i.name}`} size="sm" variant="secondary" className="text-green-700 dark:text-green-400" onClick={() => setAdjusting({ ing: i, mode: 'in' })}><ArrowDownToLine size={15} aria-hidden /></IconButton>
                       <IconButton label={`Stok keluar ${i.name}`} size="sm" variant="secondary" className="text-red-600" onClick={() => setAdjusting({ ing: i, mode: 'out' })}><ArrowUpFromLine size={15} aria-hidden /></IconButton>
                       <IconButton label={`Stok opname ${i.name}`} size="sm" variant="secondary" onClick={() => setOpnameFor(i)}><Scale size={15} aria-hidden /></IconButton>
@@ -108,6 +128,7 @@ function IngredientForm({ ing, onClose }: { ing: Partial<Ingredient>; onClose: (
   const [recipeUnit, setRecipeUnit] = useState(ing.unit || 'gr')
   const [stock, setStock] = useState(ing.id ? String(ing.stock) : '0')
   const [minStock, setMinStock] = useState(ing.id ? String(ing.min_stock) : '0')
+  const [alertOn, setAlertOn] = useState(ing.low_stock_alert ?? true)
 
   const computedCost = costPerRecipeUnit(num(purchasePrice), num(purchaseQty), purchaseUnit, recipeUnit)
 
@@ -125,7 +146,7 @@ function IngredientForm({ ing, onClose }: { ing: Partial<Ingredient>; onClose: (
         purchase_unit: purchaseUnit,
         purchase_qty: num(purchaseQty) || 1,
         purchase_price: num(purchasePrice),
-        stock: num(stock), min_stock: num(minStock), is_active: ing.is_active ?? true,
+        stock: num(stock), min_stock: num(minStock), low_stock_alert: alertOn, is_active: ing.is_active ?? true,
       },
       { onSuccess: () => { toast.success(isNew ? 'Bahan ditambahkan' : 'Bahan disimpan'); onClose() }, onError: (e: Error) => toast.error(e.message) },
     )
@@ -188,9 +209,20 @@ function IngredientForm({ ing, onClose }: { ing: Partial<Ingredient>; onClose: (
           <Field label={isNew ? 'Stok awal' : 'Stok saat ini'} hint={isNew ? undefined : 'Gunakan stok masuk / opname'}>
             <Input inputMode="decimal" value={stock} onChange={(e) => setStock(e.target.value.replace(/[^0-9.,]/g, ''))} disabled={!isNew} className={isNew ? '' : 'opacity-60'} />
           </Field>
-          <Field label="Stok minimum" hint="Peringatan saat disentuh">
+          <Field label="Stok minimum" hint="Batas peringatan stok menipis">
             <Input inputMode="decimal" value={minStock} onChange={(e) => setMinStock(e.target.value.replace(/[^0-9.,]/g, ''))} />
           </Field>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 px-3.5 py-3 dark:border-slate-800">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Bell size={18} className={alertOn ? 'shrink-0 text-brand-600' : 'shrink-0 text-slate-400'} aria-hidden />
+            <div className="min-w-0">
+              <p className="text-sm font-bold">Notifikasi stok menipis</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Peringatan muncul saat stok menyentuh batas minimum</p>
+            </div>
+          </div>
+          <Switch checked={alertOn} onChange={setAlertOn} label="Notifikasi stok menipis" />
         </div>
 
         {!sameFamilyCompatible(purchaseUnit, recipeUnit) && (
