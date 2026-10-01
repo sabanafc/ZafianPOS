@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Flame, ImageOff } from 'lucide-react'
 import { useProductSales } from '../../hooks/useMaster'
+import { useSettings } from '../../hooks/useSettings'
 import type { Category, Product } from '../../types'
 import { fmtID } from '../../lib/utils'
 
@@ -13,7 +14,9 @@ interface Props {
 }
 
 export function ProductGrid({ products, categories, activeCat, onCat, onPick }: Props) {
-  const { data: sales = new Map() } = useProductSales()
+  const { settings } = useSettings()
+  const { data: sales = new Map() } = useProductSales(settings?.bestseller_days ?? 30)
+  const cols = settings?.menu_columns ?? 0
 
   // Terlaris dulu (qty terjual 30 hari terakhir, terbanyak di atas), sisanya alfabetis
   const filtered = useMemo(() => {
@@ -41,8 +44,8 @@ export function ProductGrid({ products, categories, activeCat, onCat, onPick }: 
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      {/* Tab kategori */}
-      <div className="flex gap-2 overflow-x-auto no-scrollbar" role="tablist" aria-label="Kategori">
+      {/* Tab kategori — grid 2 kolom, pindah baris otomatis tanpa scroll horizontal */}
+      <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Kategori">
         <CatTab id="all" label="Semua" active={activeCat === 'all'} onClick={() => onCat('all')} count={products.length} />
         {categories.filter((c) => c.is_active).map((c) => (
           <CatTab
@@ -61,7 +64,8 @@ export function ProductGrid({ products, categories, activeCat, onCat, onPick }: 
         </div>
       ) : (
         <ul
-          className="grid min-h-0 flex-1 auto-rows-min grid-cols-2 content-start gap-3 overflow-y-auto pb-4 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+          className="grid min-h-0 flex-1 auto-rows-min content-start gap-3 overflow-y-auto pb-4 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+          style={cols >= 3 && cols <= 5 ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` } : undefined}
           aria-label="Daftar menu"
         >
           {filtered.map((p) => (
@@ -83,10 +87,10 @@ export function ProductGrid({ products, categories, activeCat, onCat, onPick }: 
                     <ImageOff size={28} className="text-slate-400" />
                   </div>
                 )}
-                {/* Badge terlaris — produk paling laku di tampilan ini */}
+                {/* Badge terlaris — produk paling laku di tampilan ini, lengkap dengan qty terjual */}
                 {topId === p.id && (
-                  <span className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-full bg-orange-500/95 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-white shadow" aria-label="Menu terlaris">
-                    <Flame size={11} aria-hidden /> Terlaris
+                  <span className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-full bg-orange-500/95 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-white shadow" aria-label={`Menu terlaris, terjual ${(sales.get(p.id) || 0)}x`}>
+                    <Flame size={11} aria-hidden /> Terlaris · {(sales.get(p.id) || 0).toLocaleString('id-ID')}x
                   </span>
                 )}
                 {/* Bar info mengikuti tema — teks & harga di tengah */}
@@ -110,14 +114,14 @@ function CatTab({ id, label, active, onClick, count }: { id: string; label: stri
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`flex h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-colors ${
+      className={`flex h-10 min-w-0 items-center gap-1.5 rounded-full px-3 text-sm font-semibold transition-colors ${
         active
           ? 'bg-brand-600 text-white'
           : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'
       }`}
     >
-      {label}
-      <span className={`rounded-full px-1.5 text-[11px] font-bold ${active ? 'bg-white/20' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+      <span className="truncate">{label}</span>
+      <span className={`shrink-0 rounded-full px-1.5 text-[11px] font-bold ${active ? 'bg-white/20' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
         {count}
       </span>
     </button>

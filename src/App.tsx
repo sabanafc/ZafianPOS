@@ -1,12 +1,15 @@
+import { lazy, Suspense } from 'react'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
-import DashboardPage from './pages/DashboardPage'
-import PosPage from './pages/PosPage'
-import MenuPage from './pages/MenuPage'
-import IngredientsPage from './pages/IngredientsPage'
-import FinancePage from './pages/FinancePage'
-import SettingsPage from './pages/SettingsPage'
+
+// Kode-split per halaman: bundle awal kecil, tiap halaman dimuat saat dibutuhkan
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const PosPage = lazy(() => import('./pages/PosPage'))
+const MenuPage = lazy(() => import('./pages/MenuPage'))
+const IngredientsPage = lazy(() => import('./pages/IngredientsPage'))
+const FinancePage = lazy(() => import('./pages/FinancePage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 import SetupScreen from './pages/SetupScreen'
 import { Toasts } from './lib/toast'
 import { useSettings, useThemeEffect } from './hooks/useSettings'
@@ -55,15 +58,17 @@ function Shell() {
   return (
     <DbGate>
       <Layout>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/pos" element={<PosPage />} />
-          <Route path="/menu" element={<MenuPage />} />
-          <Route path="/bahan" element={<IngredientsPage />} />
-          <Route path="/keuangan" element={<FinancePage />} />
-          <Route path="/pengaturan" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<Splash />}>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/pos" element={<PosPage />} />
+            <Route path="/menu" element={<MenuPage />} />
+            <Route path="/bahan" element={<IngredientsPage />} />
+            <Route path="/keuangan" element={<FinancePage />} />
+            <Route path="/pengaturan" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </Layout>
     </DbGate>
   )

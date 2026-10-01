@@ -54,6 +54,7 @@ export default function PosPage() {
   }
 
   const submitPayment = async (payment: PaymentMethod, paid: number) => {
+    if (createOrder.isPending) return // cegah dobel payment
     createOrder.mutate(
       {
         channel, discount, payment, paid,
@@ -180,7 +181,7 @@ export default function PosPage() {
       </Modal>
 
       <PaymentModal
-        open={payOpen} total={totals.total} isOnlineRecording={online}
+        open={payOpen} total={totals.total} isOnlineRecording={online} busy={createOrder.isPending}
         onClose={() => setPayOpen(false)} onDone={submitPayment}
       />
       <ReceiptDialog order={lastOrder} settings={settings} onClose={() => setLastOrder(null)} />

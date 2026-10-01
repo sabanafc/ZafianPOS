@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Banknote, QrCode, Landmark, Delete, Check } from 'lucide-react'
 import { Modal } from '../Modal'
 import { Button } from '../ui'
@@ -11,36 +11,59 @@ interface Props {
   open: boolean
   total: number
   isOnlineRecording?: boolean
+  /** true saat order sedang dikirim — memblokir tombol selesai agar tidak dobel */
+  busy?: boolean
   onClose: () => void
   onDone: (payment: PaymentMethod, paid: number) => void
 }
 
-export function PaymentModal({ open, total, isOnlineRecording = false, onClose, onDone }: Props) {
+export function PaymentModal({ open, total, isOnlineRecording = false, busy = false, onClose, onDone }: Props) {
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [paid, setPaid] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const presetRef = useRef(false)
   const change = Math.max(0, (Number(paid) || 0) - total)
   const enough = (Number(paid) || 0) >= total
+  const processing = submitting || busy
+
+  // Reset penuh setiap modal dibuka — sisa nilai/metode dari transaksi sebelumnya tidak terbawa
+  useEffect(() => {
+    if (open) {
+      presetRef.current = false
+      setPaid('')
+      setMethod('cash')
+      setSubmitting(false)
+    }
+  }, [open])
+
+  // mutasi selesai (berhasil/gagal) → lepas status memproses agar bisa diulang bila gagal
+  useEffect(() => { if (open && !busy) setSubmitting(false) }, [open, busy])
 
   const press = (k: string) => {
-    if (k === 'C') return setPaid('')
-    if (k === '⌫') return setPaid((p) => p.slice(0, -1))
+    if (k === 'C') { presetRef.current = false; return setPaid('') }
+    if (k === '⌫') { presetRef.current = false; return setPaid((p) => p.slice(0, -1)) }
+    // ketikan setelah tombol nominal cepat MENGANTI nilainya, bukan menempel
+    // ("1" setelah 100.000 → 1, bukan 100.001). Flag dibaca di luar updater
+    // agar tetap benar walau StrictMode memanggil updater 2x.
+    const replace = presetRef.current
+    presetRef.current = false
     setPaid((p) => {
-      // ganti nilai jika masih nol supaya "0" tidak menempel di depan
-      const base = p === '0' ? '' : p
-      const next = (base + k).replace(/^0+(?=\d)/, '')
-      return next.slice(0, 9)
+      const base = replace ? '' : p === '0' ? '' : p
+      return (base + k).slice(0, 9)
     })
   }
 
   const submit = () => {
+    if (processing) return // cegah dobel payment
     // Pesanan online (GoFood/GrabFood/ShopeeFood): hanya dicatat, tanpa pembayaran
-    if (isOnlineRecording) return onDone('cash', total)
-    if (method !== 'cash') return onDone(method, total)
+    if (isOnlineRecording) { setSubmitting(true); return onDone('cash', total) }
+    if (method !== 'cash') { setSubmitting(true); return onDone(method, total) }
     if (!enough) return
+    setSubmitting(true)
     onDone('cash', Number(paid))
   }
 
-  const quickSet = (v: number) => setPaid(String(v))
+  const quickSet = (v: number) => { presetRef.current = true; setPaid(String(v)) }
 
   return (
     <Modal open={open} onClose={onClose} title={isOnlineRecording ? 'Catat Pesanan Online' : 'Pembayaran'} size="md">
@@ -58,7 +81,7 @@ export function PaymentModal({ open, total, isOnlineRecording = false, onClose, 
                 key={id}
                 role="radio"
                 aria-checked={method === id}
-                onClick={() => { setMethod(id); if (id !== 'cash') setPaid('') }}
+                onClick={() => { presetRef.current = false; setMethod(id); if (id !== 'cash') setPaid('') }}
                 className={`flex h-16 flex-col items-center justify-center gap-1 rounded-2xl border-2 text-sm font-bold transition-colors ${
                   method === id
                     ? 'border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
@@ -132,14 +155,14 @@ export function PaymentModal({ open, total, isOnlineRecording = false, onClose, 
         )}
 
         <div className="flex gap-2">
-          <Button variant="secondary" className="flex-1" size="lg" onClick={onClose}>Batal</Button>
+          <Button variant="secondary" className="flex-1" size="lg" onClick={onClose} disabled={processing}>Batal</Button>
           <Button
             className="flex-[2]" size="lg" variant={isOnlineRecording ? 'success' : 'primary'}
             onClick={submit}
-            disabled={!isOnlineRecording && method === 'cash' && (!enough || paid === '')}
+            disabled={processing || (!isOnlineRecording && method === 'cash' && (!enough || paid === ''))}
             aria-label={`Konfirmasi ${fmtID(total)}`}
           >
-            <Check size={18} aria-hidden />
+            {processing ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-label="Memproses" /> : <Check size={18} aria-hidden />}
             {isOnlineRecording ? 'Catat Pesanan' : `Selesai — ${fmtID(total)}`}
           </Button>
         </div>

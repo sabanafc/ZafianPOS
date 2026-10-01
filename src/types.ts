@@ -30,6 +30,8 @@ export interface Settings {
   paper_width: number; default_float: number; dark_mode: boolean
   auto_print: boolean; print_margin_mm: number; print_font_scale: number
   promo_text: string | null; show_promo_on_receipt: boolean
+  menu_columns: number      // 0 = otomatis, 3/4/5 = jumlah kolom tetap grid menu kasir
+  bestseller_days: number   // periode hitung terlaris: 7/30/90, 0 = semua waktu
 }
 
 export const ONLINE_CHANNELS: Channel[] = ['gofood', 'grabfood', 'shopeefood']

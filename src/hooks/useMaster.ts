@@ -410,18 +410,19 @@ export function useAllRecipes() {
   })
 }
 
-/** Total qty terjual per produk (order berstatus paid, 30 hari terakhir) —
- *  dipakai untuk menyortir menu terlaris di halaman kasir. */
-export function useProductSales() {
+/** Total qty terjual per produk (order berstatus paid) —
+ *  dipakai untuk menyortir menu terlaris di halaman kasir.
+ *  days = periode (7/30/90); 0 = semua waktu. */
+export function useProductSales(days = 30) {
   return useQuery({
-    queryKey: ['product-sales'],
+    queryKey: ['product-sales', days],
     queryFn: async (): Promise<Map<string, number>> => {
-      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-      const { data, error } = await supabase
+      let q = supabase
         .from('order_items')
         .select('product_id, qty, orders!inner(status, created_at)')
         .eq('orders.status', 'paid')
-        .gte('orders.created_at', since)
+      if (days > 0) q = q.gte('orders.created_at', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
+      const { data, error } = await q
       if (error) throw error
       const m = new Map<string, number>()
       for (const r of data as Array<{ product_id: string | null; qty: number }>) {

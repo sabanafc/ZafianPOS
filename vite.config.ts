@@ -42,5 +42,16 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    // Pisahkan vendor besar ke chunk sendiri agar tidak ada bundle >500 kB
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          vendor: ['@supabase/supabase-js', '@tanstack/react-query', 'zustand'],
+        },
+      },
+    },
+  },
   resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
 })

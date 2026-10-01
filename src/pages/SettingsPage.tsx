@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Store, Receipt, PiggyBank, Moon, Download, Upload, Database, Printer, RotateCw, Bluetooth, FileDown } from 'lucide-react'
+import { Store, Receipt, PiggyBank, Moon, LayoutGrid, CalendarDays, Download, Upload, Database, Printer, RotateCw, Bluetooth, FileDown } from 'lucide-react'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
 import { useProducts, useIngredients, useCategories, useAllRecipes, useImportProducts, useImportIngredients, useImportRecipes } from '../hooks/useMaster'
 import { useOrdersAll } from '../hooks/useOrders'
@@ -183,17 +183,67 @@ function ShiftTab({ settings, save }: { settings: Settings; save: Saver }) {
 }
 
 function DisplayTab({ settings, save }: { settings: Settings; save: Saver }) {
+  const cols = settings.menu_columns ?? 0
+  const days = settings.bestseller_days ?? 30
   return (
-    <Card className="max-w-3xl p-5">
-      <h2 className="mb-4 flex items-center gap-2 text-sm font-bold"><Moon size={16} aria-hidden /> Tampilan</h2>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold">Mode gelap</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Nyaman digunakan di lingkungan redup</p>
+    <div className="grid max-w-3xl gap-4">
+      <Card className="p-5">
+        <h2 className="mb-4 flex items-center gap-2 text-sm font-bold"><Moon size={16} aria-hidden /> Tampilan</h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Mode gelap</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Nyaman digunakan di lingkungan redup</p>
+          </div>
+          <Switch checked={settings.dark_mode} onChange={(v) => save({ dark_mode: v }, v ? 'Mode gelap aktif' : 'Mode terang aktif')} label="Mode gelap" />
         </div>
-        <Switch checked={settings.dark_mode} onChange={(v) => save({ dark_mode: v }, v ? 'Mode gelap aktif' : 'Mode terang aktif')} label="Mode gelap" />
-      </div>
-    </Card>
+      </Card>
+
+      <Card className="p-5">
+        <h2 className="mb-4 flex items-center gap-2 text-sm font-bold"><LayoutGrid size={16} aria-hidden /> Halaman Kasir</h2>
+        <div className="space-y-4">
+          <div>
+            <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Jumlah kolom grid menu</span>
+            <div className="flex gap-2" role="radiogroup" aria-label="Jumlah kolom grid menu">
+              {([
+                [0, 'Otomatis'],
+                [3, '3 kolom'],
+                [4, '4 kolom'],
+                [5, '5 kolom'],
+              ] as Array<[number, string]>).map(([v, label]) => (
+                <button
+                  key={v} role="radio" aria-checked={cols === v}
+                  onClick={() => save({ menu_columns: v }, v === 0 ? 'Grid menu otomatis' : `Grid menu ${v} kolom`)}
+                  className={`h-11 flex-1 rounded-xl border-2 text-sm font-bold ${cols === v ? 'border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">"Otomatis" menyesuaikan lebar layar (3–5 kolom).</p>
+          </div>
+          <div>
+            <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Periode menu terlaris</span>
+            <div className="flex gap-2" role="radiogroup" aria-label="Periode menu terlaris">
+              {([
+                [7, '7 hari'],
+                [30, '30 hari'],
+                [90, '90 hari'],
+                [0, 'Semua'],
+              ] as Array<[number, string]>).map(([v, label]) => (
+                <button
+                  key={v} role="radio" aria-checked={days === v}
+                  onClick={() => save({ bestseller_days: v }, v === 0 ? 'Terlaris dihitung dari semua waktu' : `Terlaris dihitung ${v} hari terakhir`)}
+                  className={`h-11 flex-1 rounded-xl border-2 text-sm font-bold ${days === v ? 'border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}
+                >
+                  <CalendarDays size={14} className="mr-1 inline" aria-hidden />{label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Menu terlaris di halaman kasir dihitung dari penjualan pada periode ini.</p>
+          </div>
+        </div>
+      </Card>
+    </div>
   )
 }
 

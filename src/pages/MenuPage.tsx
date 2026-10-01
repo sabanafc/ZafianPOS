@@ -1,9 +1,11 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
-import { Plus, Pencil, Trash2, ImageUp, UtensilsCrossed, Tags, ChefHat, Search, GripVertical, Power } from 'lucide-react'
+import { Plus, Pencil, Trash2, ImageUp, UtensilsCrossed, Tags, ChefHat, Search, GripVertical, Power, Flame } from 'lucide-react'
 import {
   useProducts, useCategories, useSaveProduct, useDeleteProduct, useAllRecipes,
   useSaveCategory, useDeleteCategory, useReorderCategories, useSetRecipe, useIngredients, useRecipe, useToggleProduct,
+  useProductSales,
 } from '../hooks/useMaster'
+import { useSettings } from '../hooks/useSettings'
 import { uploadProductImage } from '../lib/storage'
 import type { Category, Product } from '../types'
 import { Page, Card, Button, IconButton, Input, Select, Field, Badge, EmptyState, Switch, ConfirmDialog, Spinner } from '../components/ui'
@@ -41,6 +43,8 @@ function ProductsTab() {
   const { data: products = [], isLoading } = useProducts()
   const { data: categories = [] } = useCategories()
   const { data: recipes = [] } = useAllRecipes()
+  const { settings } = useSettings()
+  const { data: sales = new Map() } = useProductSales(settings?.bestseller_days ?? 30)
   const del = useDeleteProduct()
   const toggle = useToggleProduct()
   const [q, setQ] = useState('')
@@ -61,6 +65,9 @@ function ProductsTab() {
   const catName = (id: string | null) => categories.find((c) => c.id === id)?.name || '—'
   const list = products.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()))
 
+  // 10 menu paling laku (qty terjual sesuai periode di Pengaturan)
+  const topSales = useMemo(() => [...sales.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10), [sales])
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -70,6 +77,21 @@ function ProductsTab() {
         </div>
         <Button onClick={() => setEditingId('new')}><Plus size={17} aria-hidden /> Produk</Button>
       </div>
+
+      {!isLoading && topSales.length > 0 && (
+        <Card className="p-4">
+          <h2 className="mb-2.5 flex items-center gap-1.5 text-sm font-bold"><Flame size={15} className="text-orange-500" aria-hidden /> Menu Terlaris</h2>
+          <ol className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+            {topSales.map(([id, qty], i) => (
+              <li key={id} className="flex items-center gap-2.5 text-sm">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" aria-hidden>{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate font-medium">{products.find((p) => p.id === id)?.name || '—'}</span>
+                <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-500 dark:text-slate-400">{qty.toLocaleString('id-ID')}x</span>
+              </li>
+            ))}
+          </ol>
+        </Card>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-16"><Spinner /></div>
