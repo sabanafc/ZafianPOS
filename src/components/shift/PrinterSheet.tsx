@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Bluetooth, BluetoothConnected, BluetoothOff, Loader2, RefreshCw, AlertTriangle, Info } from 'lucide-react'
 import { Modal } from '../Modal'
 import { Button } from '../ui'
-import { BT_SUPPORT, connectPrinter, disconnectPrinter, printTestPage, subscribeBt, type BtState } from '../../lib/bluetoothPrint'
+import { BT_SUPPORT, autoReconnect, connectPrinter, disconnectPrinter, printTestPage, subscribeBt, type BtState } from '../../lib/bluetoothPrint'
 import type { Settings } from '../../types'
 import { toast } from '../../lib/toast'
 
@@ -20,6 +20,19 @@ export function PrinterSheet({ open, onClose, settings }: { open: boolean; onClo
   const bt = useBtPrinter()
   const [busy, setBusy] = useState<'connect' | 'test' | null>(null)
   const [err, setErr] = useState<string | null>(null)
+
+  // saat dialog dibuka & belum terhubung → coba sambung ulang otomatis (tanpa pairing)
+  useEffect(() => {
+    if (!open || bt.connected) return
+    let cancelled = false
+    autoReconnect().then((res) => {
+      if (cancelled) return
+      if (res === 'connected') toast.success('Printer tersambung kembali')
+      else if (res === 'failed') setErr('Koneksi printer terputus — tekan Hubungkan untuk pairing ulang')
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const handleConnect = async () => {
     setErr(null)

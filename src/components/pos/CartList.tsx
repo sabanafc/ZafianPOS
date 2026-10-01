@@ -3,7 +3,7 @@ import type { CartLine, HeldOrder } from '../../store/pos'
 import type { Settings } from '../../types'
 import { fmtID } from '../../lib/utils'
 import { calcTotals } from '../../lib/posCalc'
-import { IconButton, Input } from '../ui'
+import { IconButton, Input, Badge } from '../ui'
 
 interface Props {
   lines: CartLine[]
@@ -15,16 +15,36 @@ interface Props {
   onRemove: (id: string) => void
   onDiscount: (d: number) => void
   onHold?: () => void
+  onClear?: () => void
   onResumeHold?: (id: string) => void
   onDeleteHold?: (id: string) => void
 }
 
-export function CartList({ lines, discount, settings, held = [], online, onQty, onRemove, onDiscount, onHold, onResumeHold, onDeleteHold }: Props) {
+export function CartList({ lines, discount, settings, held = [], online, onQty, onRemove, onDiscount, onHold, onClear, onResumeHold, onDeleteHold }: Props) {
   const subtotal = lines.reduce((s, l) => s + l.price * l.qty, 0)
   const t = calcTotals(subtotal, discount, settings)
+  const itemCount = lines.reduce((s, l) => s + l.qty, 0)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* Header keranjang + aksi tahan/kosongkan */}
+      {(onHold || onClear) && (
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="flex min-w-0 items-center gap-2 text-sm font-bold">
+            <span className="truncate">Keranjang</span>
+            {itemCount > 0 && <Badge tone="brand">{itemCount} item</Badge>}
+          </h3>
+          <div className="flex shrink-0 gap-1">
+            <IconButton label="Tahan pesanan (simpan sementara)" size="sm" variant="secondary" disabled={!lines.length || !onHold} onClick={onHold}>
+              <PauseCircle size={15} aria-hidden />
+            </IconButton>
+            <IconButton label="Kosongkan keranjang" size="sm" variant="ghost" className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" disabled={!lines.length || !onClear} onClick={onClear}>
+              <Trash2 size={15} aria-hidden />
+            </IconButton>
+          </div>
+        </div>
+      )}
+
       {lines.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800" aria-hidden>
@@ -78,14 +98,6 @@ export function CartList({ lines, discount, settings, held = [], online, onQty, 
               <dd className="text-lg font-bold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(t.total)}</dd>
             </div>
           </dl>
-          {onHold && (
-            <button
-              onClick={onHold}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-            >
-              <PauseCircle size={17} aria-hidden /> Tahan Pesanan
-            </button>
-          )}
         </div>
       )}
 

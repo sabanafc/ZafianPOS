@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, ShoppingCart, UtensilsCrossed, Package, Wallet, Settings as SettingsIcon,
-  Lock, LogIn, Coins, Printer,
+  Lock, LogIn, Coins, Printer, History,
 } from 'lucide-react'
 import { useActiveShift, useCloseShift } from '../hooks/useOrders'
 import { useSettings } from '../hooks/useSettings'
+import { useUiStore } from '../store/pos'
 import { Button, IconButton, Spinner } from './ui'
 import { toast } from '../lib/toast'
+import { autoReconnect } from '../lib/bluetoothPrint'
 import { ShiftSheet } from './shift/ShiftSheet'
 import { CashSheet } from './shift/CashSheet'
 import { PrinterSheet, useBtPrinter } from './shift/PrinterSheet'
@@ -29,6 +31,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [showPrinter, setShowPrinter] = useState(false)
   const closeShift = useCloseShift()
   const bt = useBtPrinter()
+  const location = useLocation()
+  const setHistoryOpen = useUiStore((s) => s.setHistoryOpen)
+
+  /** Klik ikon printer: coba sambung ulang otomatis; gagal → buka dialog pairing */
+  const handlePrinterClick = async () => {
+    const res = await autoReconnect()
+    if (res === 'connected') {
+      toast.success('Printer tersambung kembali')
+      return
+    }
+    if (res === 'failed') toast.error('Koneksi printer terputus — hubungkan ulang')
+    setShowPrinter(true)
+  }
 
   const handleCloseShift = (counted: number) => {
     if (!shift) return
@@ -93,14 +108,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     Shift aktif
                   </span>
                 )}
-                {/* Printer Bluetooth: pairing, status, test print — tanpa perlu ke Pengaturan */}
+                {/* Riwayat transaksi — hanya di halaman kasir */}
+                {location.pathname === '/pos' && (
+                  <IconButton label="Riwayat transaksi" variant="secondary" onClick={() => setHistoryOpen(true)}>
+                    <History size={18} aria-hidden />
+                  </IconButton>
+                )}
+                {/* Printer Bluetooth: hijau = terhubung, merah = belum/terputus. Klik = auto reconnect */}
                 <IconButton
-                  label={bt.connected ? `Printer: ${bt.name} — buka dialog` : 'Printer: hubungkan Bluetooth'}
-                  variant={bt.connected ? 'success' : 'secondary'}
-                  onClick={() => setShowPrinter(true)}
+                  label={bt.connected ? `Printer terhubung: ${bt.name}` : 'Printer belum terhubung — klik untuk sambung ulang'}
+                  variant={bt.connected ? 'success' : 'danger'}
+                  onClick={handlePrinterClick}
                 >
                   <Printer size={18} aria-hidden />
-                  {bt.connected && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-slate-900" aria-hidden />}
                 </IconButton>
                 {shift && (
                   <>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { History, Trash2, ShoppingCart as CartIcon, Loader2, LogIn, PauseCircle } from 'lucide-react'
-import { usePosStore } from '../store/pos'
+import { Trash2, ShoppingCart as CartIcon, Loader2, LogIn } from 'lucide-react'
+import { usePosStore, useUiStore } from '../store/pos'
 import { useProducts, useCategories } from '../hooks/useMaster'
 import { useSettings } from '../hooks/useSettings'
 import { useActiveShift, useCreateOrder, useOrderHistory, useVoidOrder } from '../hooks/useOrders'
@@ -27,18 +27,18 @@ export default function PosPage() {
   const createOrder = useCreateOrder()
   const { data: history = [] } = useOrderHistory(20)
   const voidOrder = useVoidOrder()
+  const historyOpen = useUiStore((s) => s.historyOpen)
+  const setHistoryOpen = useUiStore((s) => s.setHistoryOpen)
 
   const {
     channel, lines, discount, note, held,
-    setChannel, add, setQty, remove, clear, setDiscount, setNote,
+    setChannel, add, setQty, remove, clear, setDiscount,
     holdOrder, resumeHold, deleteHold,
   } = usePosStore()
 
   const [cat, setCat] = useState('all')
-  const [search, setSearch] = useState('')
   const [payOpen, setPayOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
-  const [histOpen, setHistOpen] = useState(false)
   const [shiftGate, setShiftGate] = useState(false)
   const [lastOrder, setLastOrder] = useState<Order | null>(null)
 
@@ -82,6 +82,11 @@ export default function PosPage() {
     }
   }
 
+  const doClear = () => {
+    clear()
+    toast.info('Keranjang dikosongkan')
+  }
+
   if (!shift) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
@@ -106,24 +111,12 @@ export default function PosPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Baris atas: channel + aksi */}
-      <div className="flex items-center gap-2 px-4 pt-3 md:px-6 md:pt-4" style={{ paddingTop: 'max(0.75rem, var(--sat))' }}>
+      {/* Baris channel pesanan — full width */}
+      <div className="px-4 pt-3 md:px-6 md:pt-4" style={{ paddingTop: 'max(0.75rem, var(--sat))' }}>
         <ChannelPicker value={channel} onChange={setChannel} />
-        <div className="ml-auto flex shrink-0 gap-1.5">
-          <IconButton label={`Pesanan ditahan: ${held.length}`} variant={held.length ? 'primary' : 'secondary'} className="relative" onClick={() => setCartOpen(true)} disabled={!held.length && !lines.length}>
-            <PauseCircle size={18} aria-hidden />
-            {held.length > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{held.length}</span>}
-          </IconButton>
-          <IconButton label="Riwayat transaksi" variant="secondary" onClick={() => setHistOpen(true)}>
-            <History size={18} aria-hidden />
-          </IconButton>
-          <IconButton label="Kosongkan keranjang" variant="secondary" onClick={() => { clear(); toast.info('Keranjang dikosongkan') }} disabled={lines.length === 0}>
-            <Trash2 size={18} aria-hidden />
-          </IconButton>
-        </div>
       </div>
 
-      {/* Konten: grid + keranjang */}
+      {/* Konten: grid + keranjang (keranjang hanya tampil di layar lebar) */}
       <div className="flex min-h-0 flex-1 gap-4 p-4 md:p-6">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {pLoading ? (
@@ -136,26 +129,17 @@ export default function PosPage() {
               categories={categories}
               activeCat={cat}
               onCat={setCat}
-              search={search}
-              onSearch={setSearch}
               onPick={pick}
             />
           )}
         </div>
 
-        {/* Panel keranjang (tablet+) */}
-        <aside className="hidden w-[360px] shrink-0 flex-col rounded-2xl border border-slate-200 bg-slate-50 p-3 md:flex dark:border-slate-800 dark:bg-slate-900" aria-label="Keranjang">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-sm font-bold">
-              <ch.icon size={16} style={{ color: ch.color }} aria-hidden />
-              Keranjang · {ch.short}
-            </h2>
-            {lines.length > 0 && <Badge tone="brand">{lines.reduce((s, l) => s + l.qty, 0)} item</Badge>}
-          </div>
+        {/* Panel keranjang — hanya layar lebar (tablet landscape/desktop) */}
+        <aside className="hidden w-[320px] shrink-0 flex-col rounded-2xl border border-slate-200 bg-slate-50 p-3 xl:w-[370px] lg:flex dark:border-slate-800 dark:bg-slate-900" aria-label="Keranjang">
           <CartList
             lines={lines} discount={discount} settings={settings} held={held} online={online}
             onQty={setQty} onRemove={remove} onDiscount={setDiscount}
-            onHold={doHold} onResumeHold={resumeHold} onDeleteHold={deleteHold}
+            onHold={doHold} onClear={doClear} onResumeHold={resumeHold} onDeleteHold={deleteHold}
           />
           <Button size="lg" className="mt-3 w-full" disabled={lines.length === 0 || createOrder.isPending} onClick={() => setPayOpen(true)}>
             {actionLabel} · {fmtID(totals.total)}
@@ -163,9 +147,9 @@ export default function PosPage() {
         </aside>
       </div>
 
-      {/* Bottom bar keranjang (ponsel) */}
+      {/* Bottom bar keranjang (ponsel & tablet portrait) */}
       {lines.length > 0 && (
-        <div className="sticky bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95">
+        <div className="sticky bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/95">
           <Button size="lg" className="w-full" onClick={() => setCartOpen(true)}>
             <CartIcon size={18} aria-hidden />
             {lines.reduce((s, l) => s + l.qty, 0)} item · {fmtID(totals.total)}
@@ -173,13 +157,15 @@ export default function PosPage() {
         </div>
       )}
 
-      {/* Sheet keranjang ponsel */}
+      {/* Sheet keranjang (ponsel & tablet portrait) */}
       <Modal open={cartOpen} onClose={() => setCartOpen(false)} title={`Keranjang · ${ch.short}`}>
         <div className="flex min-h-[50dvh] flex-col">
           <CartList
             lines={lines} discount={discount} settings={settings} held={held} online={online}
             onQty={setQty} onRemove={remove} onDiscount={setDiscount}
-            onHold={doHold} onResumeHold={(id) => { resumeHold(id); setCartOpen(false) }} onDeleteHold={deleteHold}
+            onHold={doHold} onClear={doClear}
+            onResumeHold={(id) => { resumeHold(id); setCartOpen(false) }}
+            onDeleteHold={deleteHold}
           />
           <Button size="lg" className="mt-4 w-full" disabled={lines.length === 0} onClick={() => { setCartOpen(false); setPayOpen(true) }}>
             {actionLabel} · {fmtID(totals.total)}
@@ -193,8 +179,8 @@ export default function PosPage() {
       />
       <ReceiptDialog order={lastOrder} settings={settings} onClose={() => setLastOrder(null)} />
 
-      {/* Riwayat + void */}
-      <Modal open={histOpen} onClose={() => setHistOpen(false)} title="Riwayat Transaksi" size="lg">
+      {/* Riwayat + void — dibuka dari ikon riwayat di topbar */}
+      <Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title="Riwayat Transaksi" size="lg">
         {history.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-500">Belum ada transaksi.</p>
         ) : (

@@ -264,20 +264,20 @@ function RecipeModal({ product, onClose }: { product: Product; onClose: () => vo
         </div>
       }
     >
-      {/* Header kolom */}
-      <div className="mb-1.5 flex items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-        <span className="flex-1">Bahan</span>
-        <span className="w-28 text-right">Jumlah</span>
-        <span className="w-12">Sat</span>
-        <span className="w-9" aria-hidden />
+      {/* Header kolom — sejajar dengan grid baris */}
+      <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_6rem_3.5rem_2.25rem] items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+        <span>Bahan</span>
+        <span className="text-right">Jumlah</span>
+        <span className="text-center">Satuan</span>
+        <span aria-hidden />
       </div>
       <div className="space-y-2">
         {current.length === 0 && <p className="py-4 text-center text-sm text-slate-500">Belum ada bahan. Tambahkan bahan pembentuk HPP.</p>}
         {current.map((r, i) => {
           const ing = ingredients.find((x) => x.id === r.ingredient_id)
           return (
-            <div key={i} className="flex items-center gap-2">
-              <Select value={r.ingredient_id} onChange={(e) => setRow(i, { ingredient_id: e.target.value })} aria-label={`Bahan ${i + 1}`} className="min-w-0 flex-1">
+            <div key={i} className="grid grid-cols-[minmax(0,1fr)_6rem_3.5rem_2.25rem] items-center gap-2">
+              <Select value={r.ingredient_id} onChange={(e) => setRow(i, { ingredient_id: e.target.value })} aria-label={`Bahan ${i + 1}`} className="w-full min-w-0">
                 <option value="">— pilih bahan —</option>
                 {ingredients.filter((x) => x.is_active || x.id === r.ingredient_id).map((x) => (
                   <option key={x.id} value={x.id}>{x.name} ({x.unit})</option>
@@ -285,9 +285,9 @@ function RecipeModal({ product, onClose }: { product: Product; onClose: () => vo
               </Select>
               <Input
                 inputMode="decimal" value={r.qty} onChange={(e) => setRow(i, { qty: e.target.value.replace(/[^0-9.,]/g, '') })}
-                placeholder="0" aria-label={`Jumlah ${ing?.name || ''}`} className="w-28 shrink-0 text-right" />
-              <span className="w-12 shrink-0 truncate text-xs text-slate-500">{ing?.unit || '—'}</span>
-              <IconButton label="Hapus baris" size="sm" variant="ghost" className="w-9 shrink-0 text-red-500" onClick={() => removeRow(i)}><Trash2 size={14} aria-hidden /></IconButton>
+                placeholder="0" aria-label={`Jumlah ${ing?.name || ''}`} className="w-full text-right" />
+              <span className="truncate text-center text-xs text-slate-500">{ing?.unit || '—'}</span>
+              <IconButton label="Hapus baris" size="sm" variant="ghost" className="mx-auto text-red-500" onClick={() => removeRow(i)}><Trash2 size={14} aria-hidden /></IconButton>
             </div>
           )
         })}

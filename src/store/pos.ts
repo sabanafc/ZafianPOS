@@ -1,6 +1,17 @@
 import { create } from 'zustand'
 import type { Channel } from '../types'
 
+/** UI state kecil yang dibagi antara topbar (Layout) dan halaman POS */
+interface UiState {
+  historyOpen: boolean
+  setHistoryOpen: (v: boolean) => void
+}
+
+export const useUiStore = create<UiState>((set) => ({
+  historyOpen: false,
+  setHistoryOpen: (v) => set({ historyOpen: v }),
+}))
+
 export interface CartLine { productId: string; name: string; price: number; qty: number; image_url: string | null }
 
 export interface HeldOrder {

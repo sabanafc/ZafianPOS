@@ -1,4 +1,4 @@
-import { Search, ImageOff } from 'lucide-react'
+import { ImageOff } from 'lucide-react'
 import type { Category, Product } from '../../types'
 import { fmtID } from '../../lib/utils'
 
@@ -7,33 +7,14 @@ interface Props {
   categories: Category[]
   activeCat: string
   onCat: (id: string) => void
-  search: string
-  onSearch: (s: string) => void
   onPick: (p: Product) => void
 }
 
-export function ProductGrid({ products, categories, activeCat, onCat, search, onSearch, onPick }: Props) {
-  const filtered = products.filter((p) => {
-    const okCat = activeCat === 'all' || p.category_id === activeCat
-    const okSearch = !search || p.name.toLowerCase().includes(search.toLowerCase())
-    return okCat && okSearch
-  })
+export function ProductGrid({ products, categories, activeCat, onCat, onPick }: Props) {
+  const filtered = products.filter((p) => activeCat === 'all' || p.category_id === activeCat)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      {/* Pencarian */}
-      <div className="relative">
-        <Search size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          placeholder="Cari menu…"
-          aria-label="Cari menu"
-          className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-        />
-      </div>
-
       {/* Tab kategori */}
       <div className="flex gap-2 overflow-x-auto no-scrollbar" role="tablist" aria-label="Kategori">
         <CatTab id="all" label="Semua" active={activeCat === 'all'} onClick={() => onCat('all')} count={products.length} />
@@ -54,7 +35,7 @@ export function ProductGrid({ products, categories, activeCat, onCat, search, on
         </div>
       ) : (
         <ul
-          className="grid min-h-0 flex-1 auto-rows-min grid-cols-2 content-start gap-3 overflow-y-auto pb-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"
+          className="grid min-h-0 flex-1 auto-rows-min grid-cols-2 content-start gap-3 overflow-y-auto pb-4 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
           aria-label="Daftar menu"
         >
           {filtered.map((p) => (

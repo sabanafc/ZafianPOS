@@ -76,41 +76,7 @@ export async function connectPrinter(): Promise<{ ok: boolean; name?: string; er
     })
 
     const server = await dev.gatt!.connect()
-
-    // cari karakteristik writable pertama yang cocok
-    let found: BluetoothRemoteGATTCharacteristic | null = null
-    for (const svc of PRINTER_SERVICES) {
-      try {
-        const service = await server.getPrimaryService(svc.service as number | string)
-        for (const chId of svc.chars) {
-          try {
-            const ch = await service.getCharacteristic(chId as number | string)
-            if (ch.properties.write || ch.properties.writeWithoutResponse) {
-              found = ch
-              break
-            }
-          } catch { /* karakteristik tidak ada, lanjut */ }
-        }
-      } catch { /* service tidak ada, lanjut */ }
-      if (found) break
-    }
-
-    // fallback: sapu semua service & karakteristik
-    if (!found) {
-      const services = await server.getPrimaryServices()
-      for (const service of services) {
-        try {
-          const chars = await service.getCharacteristics()
-          for (const ch of chars) {
-            if (ch.properties.write || ch.properties.writeWithoutResponse) {
-              found = ch
-              break
-            }
-          }
-        } catch { /* lanjut */ }
-        if (found) break
-      }
-    }
+    const found = await findWritableCharacteristic(server)
 
     if (!found) {
       await server.disconnect?.()
@@ -127,6 +93,71 @@ export async function connectPrinter(): Promise<{ ok: boolean; name?: string; er
       return { ok: false, error: 'Pemilihan perangkat dibatalkan.' }
     }
     return { ok: false, error: msg }
+  }
+}
+
+/** Cari karakteristik writable pertama yang cocok dengan profil printer umum */
+async function findWritableCharacteristic(server: BluetoothRemoteGATTServer): Promise<BluetoothRemoteGATTCharacteristic | null> {
+  let found: BluetoothRemoteGATTCharacteristic | null = null
+  for (const svc of PRINTER_SERVICES) {
+    try {
+      const service = await server.getPrimaryService(svc.service as number | string)
+      for (const chId of svc.chars) {
+        try {
+          const ch = await service.getCharacteristic(chId as number | string)
+          if (ch.properties.write || ch.properties.writeWithoutResponse) {
+            found = ch
+            break
+          }
+        } catch { /* karakteristik tidak ada, lanjut */ }
+      }
+    } catch { /* service tidak ada, lanjut */ }
+    if (found) break
+  }
+
+  // fallback: sapu semua service & karakteristik
+  if (!found) {
+    try {
+      const services = await server.getPrimaryServices()
+      for (const service of services) {
+        try {
+          const chars = await service.getCharacteristics()
+          for (const ch of chars) {
+            if (ch.properties.write || ch.properties.writeWithoutResponse) {
+              found = ch
+              break
+            }
+          }
+        } catch { /* lanjut */ }
+        if (found) break
+      }
+    } catch { /* lanjut */ }
+  }
+
+  return found
+}
+
+export type ReconnectResult = 'connected' | 'none' | 'failed'
+
+/**
+ * Coba sambung ulang TANPA dialog pairing (memakai perangkat yang pernah dipilih
+ * pada sesi ini). Return 'none' bila belum pernah pairing → pemanggil membuka dialog.
+ */
+export async function autoReconnect(): Promise<ReconnectResult> {
+  if (characteristic && device?.gatt?.connected) {
+    setState({ connected: true, name: device.name || 'Printer Bluetooth' })
+    return 'connected'
+  }
+  if (!device) return 'none'
+  try {
+    const server = device.gatt?.connected ? device.gatt : await device.gatt!.connect()
+    const found = await findWritableCharacteristic(server)
+    if (!found) return 'failed'
+    characteristic = found
+    setState({ connected: true, name: device.name || 'Printer Bluetooth' })
+    return 'connected'
+  } catch {
+    return 'failed'
   }
 }
 
