@@ -6,7 +6,8 @@ import { useOrdersAll } from '../hooks/useOrders'
 import { Page, Card, Input, Field, Switch, Spinner, Button } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { fmtDateTime, num } from '../lib/utils'
-import { downloadCSV, parseCSV } from '../lib/csv'
+import { parseCSV } from '../lib/csv'
+import { downloadXLSX, parseXLSX } from '../lib/xlsx'
 import { toast } from '../lib/toast'
 import { isConfigured } from '../lib/supabase'
 import { TestPrint } from '../components/shift/TestPrint'
@@ -210,28 +211,28 @@ function DataCard() {
   const [preview, setPreview] = useState<{ kind: 'products' | 'ingredients' | 'recipes'; name: string; rows: string[][] } | null>(null)
 
   const exportOrders = () => {
-    downloadCSV('transaksi.csv', [
+    downloadXLSX('transaksi.xlsx', [
       ['No', 'Tanggal', 'Channel', 'Metode', 'Subtotal', 'Diskon', 'Pajak', 'Service', 'Total', 'HPP', 'Status'],
       ...orders.map((o) => [o.order_no, fmtDateTime(o.created_at), o.channel, o.payment_method || 'online', o.subtotal, o.discount, o.tax, o.service, o.total, o.cost_total, o.status]),
     ])
     toast.success('Transaksi diekspor')
   }
   const exportProducts = () => {
-    downloadCSV('produk.csv', [
+    downloadXLSX('produk.xlsx', [
       ['Nama', 'Harga', 'Kategori', 'Aktif'],
       ...products.map((p) => [p.name, p.price, categories.find((c) => c.id === p.category_id)?.name ?? '', p.is_active ? 'ya' : 'tidak']),
     ])
     toast.success('Produk diekspor')
   }
   const exportIngredients = () => {
-    downloadCSV('bahan-baku.csv', [
+    downloadXLSX('bahan-baku.xlsx', [
       ['Nama', 'Satuan resep', 'Stok', 'Min', 'Harga beli', 'Satuan beli', 'Isi', 'HPP/satuan'],
       ...ingredients.map((i) => [i.name, i.unit, i.stock, i.min_stock, i.purchase_price ?? '', i.purchase_unit ?? '', i.purchase_qty ?? '', i.cost_per_unit]),
     ])
     toast.success('Bahan baku diekspor')
   }
   const exportRecipes = () => {
-    downloadCSV('resep.csv', [
+    downloadXLSX('resep.xlsx', [
       ['Menu', 'Bahan', 'Jumlah'],
       ...recipes
         .map((r) => [products.find((p) => p.id === r.product_id)?.name ?? '', r.ingredient?.name ?? '', r.qty])
@@ -249,9 +250,14 @@ function DataCard() {
     const f = e.target.files?.[0]
     e.target.value = ''
     if (!f) return
-    const parsed = parseCSV(await f.text())
-    if (parsed.length < 2) { toast.error('File CSV kosong atau tidak berisi data'); return }
-    setPreview({ kind: kindRef.current, name: f.name, rows: parsed })
+    try {
+      const isXlsx = /\.xlsx$/i.test(f.name)
+      const parsed = isXlsx ? parseXLSX(await f.arrayBuffer()) : parseCSV(await f.text())
+      if (parsed.length < 2) { toast.error('File kosong atau tidak berisi data'); return }
+      setPreview({ kind: kindRef.current, name: f.name, rows: parsed })
+    } catch {
+      toast.error('Gagal membaca file — gunakan format .xlsx atau .csv')
+    }
   }
 
   const mapProductRow = (r: string[]) => ({
@@ -314,11 +320,11 @@ function DataCard() {
   }
 
   const tplProducts = () =>
-    downloadCSV('template-produk.csv', [['Nama', 'Harga', 'Kategori', 'Aktif'], ['Es Kopi Susu', '18000', 'Minuman', 'ya']])
+    downloadXLSX('template-produk.xlsx', [['Nama', 'Harga', 'Kategori', 'Aktif'], ['Es Kopi Susu', '18000', 'Minuman', 'ya']])
   const tplIngredients = () =>
-    downloadCSV('template-bahan.csv', [['Nama', 'Satuan resep', 'Stok', 'Min', 'Harga beli', 'Satuan beli', 'Isi', 'HPP/satuan'], ['Susu UHT', 'ml', '5000', '500', '25000', 'pack', '1000', '']])
+    downloadXLSX('template-bahan.xlsx', [['Nama', 'Satuan resep', 'Stok', 'Min', 'Harga beli', 'Satuan beli', 'Isi', 'HPP/satuan'], ['Susu UHT', 'ml', '5000', '500', '25000', 'pack', '1000', '']])
   const tplRecipes = () =>
-    downloadCSV('template-resep.csv', [
+    downloadXLSX('template-resep.xlsx', [
       ['Menu', 'Bahan', 'Jumlah'],
       ['Es Kopi Susu', 'Susu UHT', '150'],
       ['Es Kopi Susu', 'Gula Cair', '20'],
@@ -351,11 +357,11 @@ function DataCard() {
           <button className="font-semibold text-brand-600 underline-offset-2 hover:underline dark:text-brand-400" onClick={tplRecipes}>resep</button>
         </div>
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-          Nama yang sama dalam CSV akan memperbarui data yang sudah ada — aman dijalankan berulang. Import resep mengganti seluruh bahan pada menu yang ada di CSV (satuan jumlah mengikuti satuan resep bahan). Delimiter koma atau titik-koma.
+          Bisa file Excel (.xlsx) atau CSV — delimiter koma atau titik-koma. Nama yang sama akan memperbarui data yang sudah ada (aman diulang). Import resep mengganti seluruh bahan pada menu yang ada di file (satuan jumlah mengikuti satuan resep bahan).
         </p>
       </div>
 
-      <input ref={fileRef} type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={onFile} aria-hidden />
+      <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={onFile} aria-hidden />
 
       {/* Pratinjau sebelum import */}
       <Modal
