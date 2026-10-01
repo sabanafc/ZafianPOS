@@ -13,6 +13,8 @@ type Period = 'today' | 'yesterday' | 7 | 30
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>(7)
+  const [selIdx, setSelIdx] = useState<number | null>(null)
+  const changePeriod = (p: Period) => { setPeriod(p); setSelIdx(null) }
   const today = todayISO()
   const { settings } = useSettings()
 
@@ -64,41 +66,54 @@ export default function DashboardPage() {
   const trnPct = pct(trxCount, prevTrx)
   const prfPct = pct(profit, prevProfit)
 
-  // Grafik dinamis: per jam (hari ini/kemarin), per hari (7 hari), per minggu (30 hari)
-  const chart = useMemo<Array<[string, number]>>(() => {
-    if (period === 'today' || period === 'yesterday') {
-      const byHour = new Map<number, number>()
-      for (let h = 0; h < 24; h++) byHour.set(h, 0)
-      for (const o of paid) {
-        const h = new Date(o.created_at).getHours()
-        byHour.set(h, (byHour.get(h) || 0) + o.total)
-      }
-      return Array.from(byHour.entries()).map(([h, v]) => [String(h).padStart(2, '0'), v] as [string, number])
-    }
-    const byDay = new Map<string, number>()
-    for (const o of paid) byDay.set(o.created_at.slice(0, 10), (byDay.get(o.created_at.slice(0, 10)) || 0) + o.total)
+  // Grafik dinamis + perbandingan periode sebelumnya:
+  // per jam (hari ini/kemarin), per hari (7 hari), per minggu (30 hari)
+  const chart = useMemo(() => {
+    const hourMode = period === 'today' || period === 'yesterday'
+    const weekMode = !hourMode && (period as number) > 7
     const start = from.slice(0, 10), end = to.slice(0, 10)
-    const days: string[] = []
-    let d = new Date(start)
-    const endD = new Date(end)
-    while (d <= endD) {
-      const tz = d.getTimezoneOffset()
-      days.push(new Date(d.getTime() - tz * 60000).toISOString().slice(0, 10))
-      d.setDate(d.getDate() + 1)
+    const dayCount = Math.round((Date.parse(end + 'T00:00:00') - Date.parse(start + 'T00:00:00')) / 86400000) + 1
+    const count = hourMode ? 24 : weekMode ? Math.ceil(dayCount / 7) : dayCount
+
+    const buckets = (n: number) => Array.from({ length: n }, () => ({ value: 0, trx: 0, items: 0 }))
+    const fill = (orders: Order[], baseMs: number) => {
+      const arr = buckets(count)
+      for (const o of orders) {
+        let idx: number
+        if (hourMode) idx = new Date(o.created_at).getHours()
+        else {
+          const off = Math.floor((Date.parse(o.created_at.slice(0, 10) + 'T00:00:00') - baseMs) / 86400000)
+          idx = weekMode ? Math.floor(off / 7) : off
+        }
+        if (idx >= 0 && idx < count) {
+          arr[idx].value += o.total
+          arr[idx].trx += 1
+          arr[idx].items += (o.items || []).reduce((s, i) => s + i.qty, 0)
+        }
+      }
+      return arr
     }
-    if ((period as number) <= 7) {
-      return days.map((k) => [k, byDay.get(k) || 0] as [string, number])
+
+    const labels: string[] = []
+    if (hourMode) {
+      for (let h = 0; h < 24; h++) labels.push(String(h).padStart(2, '0'))
+    } else {
+      const base = new Date(start + 'T00:00:00')
+      for (let i = 0; i < count; i++) {
+        const d = new Date(base)
+        d.setDate(d.getDate() + i * (weekMode ? 7 : 1))
+        labels.push(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10))
+      }
     }
-    // 30 hari → per minggu (7 hari per batang)
-    const weeks: Array<[string, number]> = []
-    days.forEach((k, i) => {
-      if (i % 7 === 0) weeks.push([k, 0])
-      weeks[weeks.length - 1][1] += byDay.get(k) || 0
-    })
-    return weeks
-  }, [paid, from, to, period])
+
+    return {
+      labels,
+      cur: fill(paid, Date.parse(start + 'T00:00:00')),
+      prev: fill(prevPaid, Date.parse(prevFrom.slice(0, 10) + 'T00:00:00')),
+    }
+  }, [paid, prevPaid, from, to, prevFrom, period])
   const unit = period === 'today' || period === 'yesterday' ? 'jam' : (period as number) <= 7 ? 'hari' : 'minggu'
-  const maxVal = Math.max(1, ...chart.map(([, v]) => v))
+  const maxVal = Math.max(1, ...chart.cur.map((b) => b.value), ...chart.prev.map((b) => b.value))
 
   // channel breakdown
   const byChannel = useMemo(() => {
@@ -161,7 +176,7 @@ export default function DashboardPage() {
   const lastClosedShift = shifts.find((s) => s.status === 'closed')
 
   return (
-    <Page title="Dashboard" actions={<RangePicker period={period} setPeriod={setPeriod} />}>
+    <Page title="Dashboard" actions={<RangePicker period={period} setPeriod={changePeriod} />}>
       {isLoading ? (
         <div className="flex justify-center py-20"><Spinner /></div>
       ) : (
@@ -177,15 +192,67 @@ export default function DashboardPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             {/* Grafik */}
             <Card className="p-4">
-              <h2 className="mb-3 text-sm font-bold">Penjualan {label.toLowerCase()} <span className="font-medium text-slate-400 dark:text-slate-500">· per {unit}</span></h2>
-              <div className="flex h-40 items-end gap-1.5" role="img" aria-label={`Grafik penjualan ${label} per ${unit}`}>
-                {chart.map(([k, v]) => (
-                  <div key={k} className="group flex min-w-0 flex-1 flex-col items-center gap-1">
-                    <span className="text-[9px] font-semibold tabular-nums text-slate-400 opacity-0 group-hover:opacity-100">{v > 0 ? fmtIDShort(v).replace('Rp ', '') : ''}</span>
-                    <div className="w-full rounded-t-md bg-brand-500 transition-all group-hover:bg-brand-600 dark:bg-brand-600" style={{ height: `${Math.max(3, (v / maxVal) * 100)}%` }} />
-                    <span className="text-[9px] text-slate-400">{unit === 'jam' ? k : `${k.slice(8)}/${k.slice(5, 7)}`}</span>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-bold">
+                  Penjualan {label.toLowerCase()} <span className="font-medium text-slate-400 dark:text-slate-500">· per {unit}</span>
+                </h2>
+                <div className="flex items-center gap-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-brand-500" aria-hidden /> {label}</span>
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-slate-300 dark:bg-slate-600" aria-hidden /> {prevLabel}</span>
+                </div>
+              </div>
+
+              {/* Detail ketuk batang: omzet, transaksi, item + pembanding periode lalu */}
+              {selIdx !== null && (() => {
+                const c = chart.cur[selIdx], p = chart.prev[selIdx]
+                const k = chart.labels[selIdx]
+                const title = unit === 'jam'
+                  ? `${k}:00–${(Number(k) + 1) % 24}:00`
+                  : `${unit === 'minggu' ? 'Minggu' : 'Tanggal'} ${k.slice(8)}/${k.slice(5, 7)}`
+                return (
+                  <div className="mb-2.5 rounded-xl bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800" role="status" aria-live="polite">
+                    <p className="font-bold">{title}</p>
+                    <p className="mt-0.5 flex flex-wrap gap-x-3 text-slate-600 dark:text-slate-300">
+                      <span>Omzet <strong className="tabular-nums">{fmtID(c.value)}</strong></span>
+                      <span>{c.trx} transaksi</span>
+                      <span>{c.items} item</span>
+                    </p>
+                    {p.value > 0 && (
+                      <p className="mt-0.5 text-slate-500 dark:text-slate-400">
+                        {prevLabel} — omzet <strong className="tabular-nums">{fmtID(p.value)}</strong> · {p.trx} transaksi
+                      </p>
+                    )}
                   </div>
-                ))}
+                )
+              })()}
+
+              <div className="flex h-40 items-stretch gap-1.5" role="img" aria-label={`Grafik penjualan ${label} per ${unit}, dibandingkan ${prevLabel}`}>
+                {chart.labels.map((k, i) => {
+                  const c = chart.cur[i], p = chart.prev[i]
+                  const sel = selIdx === i
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setSelIdx(sel ? null : i)}
+                      aria-label={`${unit === 'jam' ? `Jam ${k}` : `Tanggal ${k.slice(8)}/${k.slice(5, 7)}`}: omzet ${fmtID(c.value)}, ${c.trx} transaksi, ${c.items} item`}
+                      className={`group flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-0.5 pt-1 ${sel ? 'bg-brand-50 dark:bg-slate-800' : ''}`}
+                    >
+                      <span className="h-3 text-[9px] font-semibold tabular-nums text-slate-400 opacity-0 group-hover:opacity-100">{c.value > 0 ? fmtIDShort(c.value).replace('Rp ', '') : ''}</span>
+                      <div className="flex min-h-0 w-full flex-1 items-end justify-center gap-[2px]">
+                        <div
+                          className={`w-full max-w-[13px] rounded-t-md transition-colors ${sel ? 'bg-brand-700 dark:bg-brand-400' : 'bg-brand-500 group-hover:bg-brand-600 dark:bg-brand-600'}`}
+                          style={{ height: `${Math.max(3, (c.value / maxVal) * 100)}%` }}
+                        />
+                        <div
+                          className="w-full max-w-[13px] rounded-t-md bg-slate-300 group-hover:bg-slate-400 dark:bg-slate-600"
+                          style={{ height: `${Math.max(3, (p.value / maxVal) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[9px] text-slate-400">{unit === 'jam' ? k : `${k.slice(8)}/${k.slice(5, 7)}`}</span>
+                    </button>
+                  )
+                })}
               </div>
             </Card>
 
