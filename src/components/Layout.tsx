@@ -14,6 +14,7 @@ import { autoReconnect } from '../lib/bluetoothPrint'
 import { ShiftSheet } from './shift/ShiftSheet'
 import { CashSheet } from './shift/CashSheet'
 import { PrinterSheet, useBtPrinter } from './shift/PrinterSheet'
+import { TickerBar } from './TickerBar'
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -145,6 +146,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </header>
 
         <main id="main" className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+
+        {/* Running text: stok kritis + promo — in-flow, tidak menutupi keranjang */}
+        <TickerBar />
 
         {/* ============ BOTTOM NAV (ponsel) ============ */}
         <nav

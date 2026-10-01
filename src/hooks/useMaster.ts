@@ -121,6 +121,104 @@ export function useDeleteProduct() {
   })
 }
 
+// ---------- Import CSV ----------
+export interface ImportResult { inserted: number; updated: number }
+
+export function useImportProducts() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (rows: Array<{ name: string; price: number; category?: string | null; is_active?: boolean }>): Promise<ImportResult> => {
+      const names = rows.map((r) => r.name)
+      const { data: existing, error: e1 } = await supabase.from('products').select('id, name').in('name', names)
+      if (e1) throw e1
+      const map = new Map((existing as Array<{ id: string; name: string }>).map((p) => [p.name.trim().toLowerCase(), p.id]))
+
+      // kategori: buat bila belum ada
+      const catNames = [...new Set(rows.map((r) => r.category?.trim()).filter(Boolean) as string[])]
+      const catMap = new Map<string, string>()
+      if (catNames.length) {
+        const { data: cats, error: e2 } = await supabase.from('categories').select('id, name').in('name', catNames)
+        if (e2) throw e2
+        for (const c of cats as Array<{ id: string; name: string }>) catMap.set(c.name.toLowerCase(), c.id)
+        const missing = catNames.filter((n) => !catMap.has(n.toLowerCase()))
+        if (missing.length) {
+          const base = await supabase.from('categories').select('sort_order').order('sort_order', { ascending: false }).limit(1)
+          let next = ((base.data?.[0] as { sort_order?: number } | undefined)?.sort_order ?? 0) + 1
+          for (const n of missing) {
+            const { data: ins, error: e3 } = await supabase.from('categories').insert({ name: n, sort_order: next++ }).select('id').single()
+            if (e3) throw e3
+            catMap.set(n.toLowerCase(), (ins as { id: string }).id)
+          }
+        }
+      }
+
+      let inserted = 0, updated = 0
+      for (const r of rows) {
+        const payload = {
+          name: r.name.trim(),
+          price: r.price,
+          category_id: r.category ? catMap.get(r.category.trim().toLowerCase()) ?? null : null,
+          is_active: r.is_active ?? true,
+        }
+        const id = map.get(r.name.trim().toLowerCase())
+        const { error } = id
+          ? await supabase.from('products').update(payload).eq('id', id)
+        : await supabase.from('products').insert(payload)
+        if (error) throw error
+        id ? updated++ : inserted++
+      }
+      return { inserted, updated }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['products'] })
+      qc.invalidateQueries({ queryKey: ['categories'] })
+    },
+  })
+}
+
+export function useImportIngredients() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (rows: Array<{
+      name: string; unit: string; stock: number; min_stock: number
+      purchase_price: number; purchase_unit: string; purchase_qty: number; cost_per_unit: number
+    }>): Promise<ImportResult> => {
+      const names = rows.map((r) => r.name)
+      const { data: existing, error: e1 } = await supabase.from('ingredients').select('id, name, stock').in('name', names)
+      if (e1) throw e1
+      const map = new Map((existing as Array<{ id: string; name: string; stock: number }>).map((i) => [i.name.trim().toLowerCase(), i]))
+
+      let inserted = 0, updated = 0
+      for (const r of rows) {
+        const prev = map.get(r.name.trim().toLowerCase())
+        if (prev) {
+          // update master + stok absolut sesuai CSV
+          const { error } = await supabase.from('ingredients').update({
+            unit: r.unit, min_stock: r.min_stock, cost_per_unit: r.cost_per_unit,
+            purchase_price: r.purchase_price, purchase_unit: r.purchase_unit, purchase_qty: r.purchase_qty,
+            stock: r.stock,
+          }).eq('id', prev.id)
+          if (error) throw error
+          updated++
+        } else {
+          const { error } = await supabase.from('ingredients').insert({
+            name: r.name.trim(), unit: r.unit, stock: r.stock, min_stock: r.min_stock,
+            cost_per_unit: r.cost_per_unit, purchase_price: r.purchase_price,
+            purchase_unit: r.purchase_unit, purchase_qty: r.purchase_qty,
+          })
+          if (error) throw error
+          inserted++
+        }
+      }
+      return { inserted, updated }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ingredients'] })
+      qc.invalidateQueries({ queryKey: ['stock-movements'] })
+    },
+  })
+}
+
 // ---------- Bahan baku ----------
 export function useIngredients() {
   return useQuery({

@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
-import { Store, Receipt, PiggyBank, Moon, Download, Database, Printer, RotateCw, Bluetooth } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { Store, Receipt, PiggyBank, Moon, Download, Upload, Database, Printer, RotateCw, Bluetooth, FileDown } from 'lucide-react'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
-import { useProducts, useIngredients } from '../hooks/useMaster'
+import { useProducts, useIngredients, useCategories, useImportProducts, useImportIngredients } from '../hooks/useMaster'
 import { useOrdersAll } from '../hooks/useOrders'
 import { Page, Card, Input, Field, Switch, Spinner, Button } from '../components/ui'
-import { fmtDateTime } from '../lib/utils'
-import { downloadCSV } from '../lib/csv'
+import { Modal } from '../components/Modal'
+import { fmtDateTime, num } from '../lib/utils'
+import { downloadCSV, parseCSV } from '../lib/csv'
 import { toast } from '../lib/toast'
 import { isConfigured } from '../lib/supabase'
 import { TestPrint } from '../components/shift/TestPrint'
@@ -199,6 +200,12 @@ function DataCard() {
   const { data: orders = [] } = useOrdersAll()
   const { data: products = [] } = useProducts()
   const { data: ingredients = [] } = useIngredients()
+  const { data: categories = [] } = useCategories()
+  const importProducts = useImportProducts()
+  const importIngredients = useImportIngredients()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const kindRef = useRef<'products' | 'ingredients'>('products')
+  const [preview, setPreview] = useState<{ kind: 'products' | 'ingredients'; name: string; rows: string[][] } | null>(null)
 
   const exportOrders = () => {
     downloadCSV('transaksi.csv', [
@@ -209,8 +216,8 @@ function DataCard() {
   }
   const exportProducts = () => {
     downloadCSV('produk.csv', [
-      ['Nama', 'Harga', 'Aktif'],
-      ...products.map((p) => [p.name, p.price, p.is_active ? 'ya' : 'tidak']),
+      ['Nama', 'Harga', 'Kategori', 'Aktif'],
+      ...products.map((p) => [p.name, p.price, categories.find((c) => c.id === p.category_id)?.name ?? '', p.is_active ? 'ya' : 'tidak']),
     ])
     toast.success('Produk diekspor')
   }
@@ -222,6 +229,61 @@ function DataCard() {
     toast.success('Bahan baku diekspor')
   }
 
+  // ---------- Import CSV ----------
+  const openImport = (kind: 'products' | 'ingredients') => {
+    kindRef.current = kind
+    fileRef.current?.click()
+  }
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    const parsed = parseCSV(await f.text())
+    if (parsed.length < 2) { toast.error('File CSV kosong atau tidak berisi data'); return }
+    setPreview({ kind: kindRef.current, name: f.name, rows: parsed })
+  }
+
+  const mapProductRow = (r: string[]) => ({
+    name: (r[0] || '').trim(),
+    price: num(r[1] || ''),
+    category: (r[2] || '').trim() || null,
+    is_active: !/^(tidak|no|false|0)$/i.test((r[3] || '').trim()),
+  })
+  const mapIngredientRow = (r: string[]) => ({
+    name: (r[0] || '').trim(),
+    unit: (r[1] || '').trim() || 'pcs',
+    stock: num(r[2] || ''),
+    min_stock: num(r[3] || ''),
+    purchase_price: num(r[4] || ''),
+    purchase_unit: (r[5] || '').trim(),
+    purchase_qty: num(r[6] || '') || 1,
+    cost_per_unit: num(r[7] || ''),
+  })
+
+  const prodRows = preview?.kind === 'products' ? preview.rows.slice(1).map(mapProductRow) : []
+  const ingRows = preview?.kind === 'ingredients' ? preview.rows.slice(1).map(mapIngredientRow) : []
+  const validProd = prodRows.filter((r) => r.name && r.price > 0)
+  const validIng = ingRows.filter((r) => r.name && r.unit)
+  const totalRows = prodRows.length + ingRows.length
+  const validCount = validProd.length + validIng.length
+  const header = preview?.rows[0] || []
+
+  const doImport = () => {
+    if (!preview) return
+    const done = (res: { inserted: number; updated: number }) => {
+      toast.success(`Import selesai: ${res.inserted} baru, ${res.updated} diperbarui`)
+      setPreview(null)
+    }
+    const fail = (e: Error) => toast.error(`Import gagal: ${e.message}`)
+    if (preview.kind === 'products') importProducts.mutate(validProd, { onSuccess: done, onError: fail })
+    else importIngredients.mutate(validIng, { onSuccess: done, onError: fail })
+  }
+
+  const tplProducts = () =>
+    downloadCSV('template-produk.csv', [['Nama', 'Harga', 'Kategori', 'Aktif'], ['Es Kopi Susu', '18000', 'Minuman', 'ya']])
+  const tplIngredients = () =>
+    downloadCSV('template-bahan.csv', [['Nama', 'Satuan resep', 'Stok', 'Min', 'Harga beli', 'Satuan beli', 'Isi', 'HPP/satuan'], ['Susu UHT', 'ml', '5000', '500', '25000', 'pack', '1000', '']])
+
   return (
     <Card className="max-w-3xl p-5">
       <h2 className="mb-4 flex items-center gap-2 text-sm font-bold"><Database size={16} aria-hidden /> Data & Backup</h2>
@@ -231,6 +293,63 @@ function DataCard() {
         <Button variant="secondary" onClick={exportIngredients}><Download size={16} aria-hidden /> Bahan Baku</Button>
       </div>
       <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Data tersimpan aman di Supabase. Ekspor CSV berkala sebagai cadangan tambahan.</p>
+
+      <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-bold"><Upload size={15} aria-hidden /> Import CSV</h3>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => openImport('products')} disabled={importProducts.isPending || importIngredients.isPending}><Upload size={16} aria-hidden /> Produk</Button>
+          <Button variant="secondary" onClick={() => openImport('ingredients')} disabled={importProducts.isPending || importIngredients.isPending}><Upload size={16} aria-hidden /> Bahan Baku</Button>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+          <span className="flex items-center gap-1"><FileDown size={13} aria-hidden /> Template:</span>
+          <button className="font-semibold text-brand-600 underline-offset-2 hover:underline dark:text-brand-400" onClick={tplProducts}>produk</button>
+          <button className="font-semibold text-brand-600 underline-offset-2 hover:underline dark:text-brand-400" onClick={tplIngredients}>bahan baku</button>
+        </div>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Nama yang sama dalam CSV akan memperbarui data yang sudah ada — aman dijalankan berulang. Delimiter koma atau titik-koma.</p>
+      </div>
+
+      <input ref={fileRef} type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={onFile} aria-hidden />
+
+      {/* Pratinjau sebelum import */}
+      <Modal
+        open={!!preview}
+        onClose={() => setPreview(null)}
+        title={preview?.kind === 'products' ? 'Import Produk' : 'Import Bahan Baku'}
+        footer={
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setPreview(null)}>Batal</Button>
+            <Button className="flex-[2]" onClick={doImport} disabled={!validCount || importProducts.isPending || importIngredients.isPending}>
+              Import {validCount} baris
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {preview?.name} — {totalRows} baris data, {validCount} siap diimport.
+          </p>
+          <div className="max-h-64 overflow-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                <tr>{header.map((h, i) => <th key={i} className="whitespace-nowrap px-2.5 py-2 font-semibold">{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {preview?.rows.slice(1, 8).map((r, idx) => (
+                  <tr key={idx} className="border-t border-slate-100 dark:border-slate-800">
+                    {r.map((c, i) => <td key={i} className="whitespace-nowrap px-2.5 py-1.5 tabular-nums">{c}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalRows > 7 && <p className="text-xs text-slate-400">… {totalRows - 7} baris lainnya</p>}
+          {totalRows - validCount > 0 && (
+            <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200" role="alert">
+              {totalRows - validCount} baris dilewati (nama kosong atau harga nol).
+            </p>
+          )}
+        </div>
+      </Modal>
     </Card>
   )
 }

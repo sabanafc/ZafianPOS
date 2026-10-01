@@ -33,7 +33,19 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  /* Ticker tetap berjalan (lambat & horizontal) karena ini informasi kasir */
+  .ticker-track { animation-duration: var(--ticker-duration, 40s) !important; }
 }
+
+/* ============ TICKER (running text) ============ */
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); } /* 50% = satu salinan teks (duplikat di belakangnya) */
+}
+.ticker-track {
+  animation: ticker-scroll var(--ticker-duration, 40s) linear infinite;
+}
+.ticker:hover .ticker-track { animation-play-state: paused; }
 
 /* ============ STRUK ============ */
 .receipt {
