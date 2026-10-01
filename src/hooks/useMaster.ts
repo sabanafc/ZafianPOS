@@ -42,21 +42,16 @@ export function useDeleteCategory() {
   })
 }
 
-/** Naik/turunkan urutan kategori dengan menukar sort_order */
-export function useMoveCategory() {
+/** Simpan urutan kategori baru (dipakai drag & drop di halaman Menu) */
+export function useReorderCategories() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, dir }: { id: string; dir: 'up' | 'down' }) => {
-      const { data: all, error } = await supabase.from('categories').select('id, sort_order').order('sort_order')
-      if (error) throw error
-      const idx = all.findIndex((c: { id: string }) => c.id === id)
-      const swapWith = dir === 'up' ? idx - 1 : idx + 1
-      if (swapWith < 0 || swapWith >= all.length) return
-      const a = all[idx], b = all[swapWith]
-      const { error: e1 } = await supabase.from('categories').update({ sort_order: b.sort_order }).eq('id', a.id)
-      if (e1) throw e1
-      const { error: e2 } = await supabase.from('categories').update({ sort_order: a.sort_order }).eq('id', b.id)
-      if (e2) throw e2
+    mutationFn: async (orderedIds: string[]) => {
+      // tulis ulang sort_order 0..n-1 sesuai posisi baru
+      for (let i = 0; i < orderedIds.length; i++) {
+        const { error } = await supabase.from('categories').update({ sort_order: i }).eq('id', orderedIds[i])
+        if (error) throw error
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['categories'] }),
   })
@@ -412,5 +407,28 @@ export function useAllRecipes() {
       if (error) throw error
       return data as RecipeItem[]
     },
+  })
+}
+
+/** Total qty terjual per produk (order berstatus paid, 30 hari terakhir) —
+ *  dipakai untuk menyortir menu terlaris di halaman kasir. */
+export function useProductSales() {
+  return useQuery({
+    queryKey: ['product-sales'],
+    queryFn: async (): Promise<Map<string, number>> => {
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+      const { data, error } = await supabase
+        .from('order_items')
+        .select('product_id, qty, orders!inner(status, created_at)')
+        .eq('orders.status', 'paid')
+        .gte('orders.created_at', since)
+      if (error) throw error
+      const m = new Map<string, number>()
+      for (const r of data as Array<{ product_id: string | null; qty: number }>) {
+        if (r.product_id) m.set(r.product_id, (m.get(r.product_id) || 0) + (r.qty || 0))
+      }
+      return m
+    },
+    staleTime: 60_000,
   })
 }

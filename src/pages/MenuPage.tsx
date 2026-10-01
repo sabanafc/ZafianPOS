@@ -1,8 +1,8 @@
-import { useMemo, useState, useRef } from 'react'
-import { Plus, Pencil, Trash2, ImageUp, UtensilsCrossed, Tags, ChefHat, Search, ChevronUp, ChevronDown, Power } from 'lucide-react'
+import { useMemo, useState, useRef, useEffect } from 'react'
+import { Plus, Pencil, Trash2, ImageUp, UtensilsCrossed, Tags, ChefHat, Search, GripVertical, Power } from 'lucide-react'
 import {
   useProducts, useCategories, useSaveProduct, useDeleteProduct, useAllRecipes,
-  useSaveCategory, useDeleteCategory, useMoveCategory, useSetRecipe, useIngredients, useRecipe, useToggleProduct,
+  useSaveCategory, useDeleteCategory, useReorderCategories, useSetRecipe, useIngredients, useRecipe, useToggleProduct,
 } from '../hooks/useMaster'
 import { uploadProductImage } from '../lib/storage'
 import type { Category, Product } from '../types'
@@ -303,9 +303,84 @@ function CategoriesTab() {
   const { data: products = [] } = useProducts()
   const save = useSaveCategory()
   const del = useDeleteCategory()
-  const move = useMoveCategory()
+  const reorder = useReorderCategories()
   const [editing, setEditing] = useState<Partial<Category> | null>(null)
   const [deleting, setDeleting] = useState<Category | null>(null)
+  // urutan sementara saat drag (optimistis), null = pakai urutan dari server
+  const [order, setOrder] = useState<Category[] | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const dragRef = useRef<{ raf: number } | null>(null)
+  const list = order ?? categories
+
+  // setelah disimpan & data server segar masuk, buang urutan optimistis
+  useEffect(() => { setOrder(null) }, [categories])
+
+  const commitOrder = (next: Category[]) => {
+    setDragId(null)
+    setOrder(next)
+    if (next.length === categories.length && next.every((c, i) => categories[i]?.id === c.id)) { setOrder(null); return } // tidak berubah
+    reorder.mutate(next.map((c) => c.id), {
+      onSuccess: () => toast.success('Urutan kategori disimpan'),
+      onError: (e: Error) => { setOrder(null); toast.error(e.message) },
+    })
+  }
+
+  /** Drag & drop via pointer events — jalan untuk sentuh (tablet) maupun mouse.
+   *  Selama digeser, daftar diatur ulang secara langsung; sort_order disimpan saat dilepas. */
+  const onHandlePointerDown = (e: React.PointerEvent, id: string) => {
+    if (dragRef.current) return
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    e.preventDefault() // cegah seleksi teks
+    const el = e.currentTarget as HTMLElement
+    el.setPointerCapture(e.pointerId)
+    const rows = () => Array.from(el.closest('ul')?.querySelectorAll<HTMLElement>('[data-cat-id]') ?? [])
+    let lastOrder = list
+    let raf = 0
+
+    const cleanup = () => {
+      cancelAnimationFrame(raf)
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', onUp)
+      el.removeEventListener('pointercancel', onCancel)
+      dragRef.current = null
+    }
+    const onMove = (ev: PointerEvent) => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        const els = rows()
+        const from = els.findIndex((r) => r.dataset.catId === id)
+        if (from < 0) return
+        // cari baris yang berada di bawah jari/kursor
+        let to = from
+        for (let j = 0; j < els.length; j++) {
+          const rect = els[j].getBoundingClientRect()
+          if (ev.clientY >= rect.top && ev.clientY <= rect.bottom) { to = j; break }
+        }
+        if (to === from) return
+        const next = [...lastOrder]
+        const [it] = next.splice(from, 1)
+        next.splice(to, 0, it)
+        lastOrder = next
+        setOrder(next)
+      })
+    }
+    const onUp = () => {
+      cleanup()
+      commitOrder(lastOrder)
+    }
+    const onCancel = () => {
+      cleanup()
+      setOrder(null)
+      setDragId(null)
+    }
+
+    dragRef.current = { raf: 0 }
+    setDragId(id)
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerup', onUp)
+    el.addEventListener('pointercancel', onCancel)
+  }
+
 
   return (
     <div className="space-y-4">
@@ -316,13 +391,17 @@ function CategoriesTab() {
         <EmptyState icon={<Tags size={24} />} title="Belum ada kategori" />
       ) : (
         <ul className="space-y-2" aria-label="Daftar kategori">
-          {categories.map((c, i) => (
-            <li key={c.id}>
-              <Card className="flex items-center gap-3 p-3">
-                <div className="flex flex-col">
-                  <IconButton label={`Naikkan ${c.name}`} size="sm" variant="ghost" disabled={i === 0 || move.isPending} onClick={() => move.mutate({ id: c.id, dir: 'up' })}><ChevronUp size={15} aria-hidden /></IconButton>
-                  <IconButton label={`Turunkan ${c.name}`} size="sm" variant="ghost" disabled={i === categories.length - 1 || move.isPending} onClick={() => move.mutate({ id: c.id, dir: 'down' })}><ChevronDown size={15} aria-hidden /></IconButton>
-                </div>
+          {list.map((c, i) => (
+            <li key={c.id} data-cat-id={c.id} className="select-none">
+              <Card className={`flex items-center gap-3 p-3 transition-shadow ${dragId === c.id ? 'ring-2 ring-brand-500 shadow-lg' : ''}`}>
+                <button
+                  type="button"
+                  aria-label={`Geser posisi ${c.name}`}
+                  onPointerDown={(e) => onHandlePointerDown(e, c.id)}
+                  className={`flex h-10 w-8 shrink-0 touch-none items-center justify-center rounded-lg text-slate-300 hover:bg-slate-100 hover:text-slate-500 active:cursor-grabbing dark:text-slate-600 dark:hover:bg-slate-800 ${dragId === c.id ? 'text-brand-600' : ''}`}
+                >
+                  <GripVertical size={18} aria-hidden />
+                </button>
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300" aria-hidden>
                   <Tags size={17} />
                 </div>

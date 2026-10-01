@@ -1,4 +1,6 @@
-import { ImageOff } from 'lucide-react'
+import { useMemo } from 'react'
+import { Flame, ImageOff } from 'lucide-react'
+import { useProductSales } from '../../hooks/useMaster'
 import type { Category, Product } from '../../types'
 import { fmtID } from '../../lib/utils'
 
@@ -11,7 +13,31 @@ interface Props {
 }
 
 export function ProductGrid({ products, categories, activeCat, onCat, onPick }: Props) {
-  const filtered = products.filter((p) => activeCat === 'all' || p.category_id === activeCat)
+  const { data: sales = new Map() } = useProductSales()
+
+  // Terlaris dulu (qty terjual 30 hari terakhir, terbanyak di atas), sisanya alfabetis
+  const filtered = useMemo(() => {
+    const inCat = products.filter((p) => activeCat === 'all' || p.category_id === activeCat)
+    const max = Math.max(0, ...sales.values())
+    return inCat.sort((a, b) => {
+      const qa = sales.get(a.id) || 0, qb = sales.get(b.id) || 0
+      if (qa !== qb) return qb - qa
+      if (max > 0 && qa > 0) return -1
+      if (max > 0 && qb > 0) return 1
+      return a.name.localeCompare(b.name, 'id')
+    })
+  }, [products, activeCat, sales])
+
+  // id produk paling laku dalam tampilan aktif (untuk badge "Terlaris")
+  const topId = useMemo(() => {
+    let best: string | null = null
+    let bestQty = 0
+    for (const p of filtered) {
+      const q = sales.get(p.id) || 0
+      if (q > bestQty) { bestQty = q; best = p.id }
+    }
+    return best
+  }, [filtered, sales])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -57,12 +83,18 @@ export function ProductGrid({ products, categories, activeCat, onCat, onPick }: 
                     <ImageOff size={28} className="text-slate-400" />
                   </div>
                 )}
+                {/* Badge terlaris — produk paling laku di tampilan ini */}
+                {topId === p.id && (
+                  <span className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-full bg-orange-500/95 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-white shadow" aria-label="Menu terlaris">
+                    <Flame size={11} aria-hidden /> Terlaris
+                  </span>
+                )}
                 {/* Bar info mengikuti tema — teks & harga di tengah */}
                 <div className="absolute inset-x-0 bottom-0 z-10 bg-white px-2 py-2 text-center dark:bg-slate-900">
                   <p className="truncate text-[15px] font-extrabold leading-tight text-slate-900 dark:text-white">{p.name}</p>
                   <p className="mt-0.5 text-[15px] font-extrabold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(p.price)}</p>
                 </div>
-                {/* Indikator stok resep habis dihilangkan — tetap ringan */}
+                {/* Indikator stok resep dihilangkan — tetap ringan */}
               </button>
             </li>
           ))}
