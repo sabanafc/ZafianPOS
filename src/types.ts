@@ -23,15 +23,21 @@ export interface Order {
 }
 export interface OrderItem { id?: string; order_id?: string; product_id: string | null; name: string; price: number; qty: number; cost_of_goods: number; line_total: number }
 export interface StockMovement { id: string; ingredient_id: string; order_id: string | null; type: 'purchase' | 'usage' | 'adjustment' | 'waste'; qty: number; stock_after: number; note: string | null; created_at: string }
-export interface FinanceEntry { id: string; type: 'income' | 'expense'; category: string; amount: number; note: string | null; entry_date: string }
+export interface FinanceEntry { id: string; type: 'income' | 'expense'; category: string; amount: number; note: string | null; entry_date: string; account?: 'wallet' | 'bank'; bank_account_id?: string | null }
+export interface BankAccount { id: string; name: string; bank_name: string | null; account_no: string | null; opening_balance: number; is_active: boolean }
+export interface BankTxn { id: string; account_id: string; type: 'in' | 'out'; source: string | null; amount: number; note: string | null; created_at: string }
 export interface Settings {
   id: number; business_name: string; address: string | null; phone: string | null
   tax_percent: number; service_percent: number; receipt_footer: string | null
   paper_width: number; default_float: number; dark_mode: boolean
   auto_print: boolean; print_margin_mm: number; print_font_scale: number
   promo_text: string | null; show_promo_on_receipt: boolean
+  show_qr_on_receipt: boolean                                    // tampilkan QR di bawah struk
+  receipt_qrs: Array<{ label: string; url: string }>             // maks 2 QR (feedback link, sosmed, dll)
   menu_columns: number      // 0 = otomatis, 3/4/5 = jumlah kolom tetap grid menu kasir
   bestseller_days: number   // periode hitung terlaris: 7/30/90, 0 = semua waktu
+  finance_pin: string | null      // hash SHA-256 PIN akses keuangan (null = tidak terkunci)
+  totp_secret: string | null      // secret base32 Google Authenticator (null = nonaktif)
 }
 
 export const ONLINE_CHANNELS: Channel[] = ['gofood', 'grabfood', 'shopeefood']

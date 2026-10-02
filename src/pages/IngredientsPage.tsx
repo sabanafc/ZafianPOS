@@ -46,19 +46,19 @@ export default function IngredientsPage() {
       ) : ingredients.length === 0 ? (
         <EmptyState icon={<Package size={24} />} title="Belum ada bahan baku" subtitle="Tambahkan bahan dasar untuk menghitung HPP dan stok otomatis" action={<Button onClick={() => setEditingId('new')}><Plus size={16} aria-hidden /> Tambah Bahan</Button>} />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Daftar bahan baku">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Daftar bahan baku">
           {ingredients.map((i) => {
             const low = i.stock <= i.min_stock
             const converted = i.purchase_unit && i.purchase_unit !== i.unit
               ? convertPurchaseToRecipe(i.purchase_qty || 1, i.purchase_unit, i.unit)
               : null
             return (
-              <li key={i.id}>
+              <li key={i.id} className="min-w-0">
                 <Card className={`p-4 ${!i.is_active ? 'opacity-60' : ''}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-bold">{i.name}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                      <p className="break-words text-xs text-slate-500 dark:text-slate-400">
                         {i.purchase_price ? `${fmtID(i.purchase_price)} / ${fmtQty(i.purchase_qty || 1)} ${i.purchase_unit}` : `${fmtID(i.cost_per_unit)} / ${i.unit}`}
                       </p>
                       {converted !== null && (
@@ -73,7 +73,7 @@ export default function IngredientsPage() {
                       <Switch checked={i.is_active} onChange={(v) => toggle.mutate({ id: i.id, is_active: v })} label={`${i.is_active ? 'Nonaktifkan' : 'Aktifkan'} ${i.name}`} />
                     </div>
                   </div>
-                  <div className="mt-3 flex items-end justify-between">
+                  <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
                     <div>
                       <p className={`text-2xl font-bold tabular-nums ${low ? 'text-red-600' : ''}`}>{fmtQty(i.stock)} <span className="text-sm font-medium text-slate-500">{i.unit}</span></p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">min. {fmtQty(i.min_stock)} {i.unit} · HPP {fmtID(i.cost_per_unit)}/{i.unit}</p>

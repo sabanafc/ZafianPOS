@@ -5,16 +5,20 @@ import { useOrders, useFinanceEntries, useShiftHistory } from '../hooks/useOrder
 import { useIngredients, useCategories, useProducts } from '../hooks/useMaster'
 import { useSettings } from '../hooks/useSettings'
 import { Page, Card, Badge, Spinner } from '../components/ui'
+import { PeriodPicker, type Period } from '../components/PeriodPicker'
 import { fmtID, fmtIDShort, fmtQty, fmtDateTime, dayStartISO, dayEndISO, todayISO, daysAgoISO } from '../lib/utils'
 import { CHANNELS, PAYMENTS } from '../lib/constants'
 import type { Order } from '../types'
 
-type Period = 'today' | 'yesterday' | 7 | 30
-
 export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>(7)
   const [selIdx, setSelIdx] = useState<number | null>(null)
+  const [customFrom, setCustomFrom] = useState(() => daysAgoISO(6))
+  const [customTo, setCustomTo] = useState(() => todayISO())
   const changePeriod = (p: Period) => { setPeriod(p); setSelIdx(null) }
+  const applyCustom = (a: string, b: string) => {
+    setCustomFrom(a); setCustomTo(b); setPeriod('custom'); setSelIdx(null)
+  }
   const today = todayISO()
   const { settings } = useSettings()
 
@@ -27,12 +31,19 @@ export default function DashboardPage() {
       const y = daysAgoISO(1), y2 = daysAgoISO(2)
       return { from: dayStartISO(y), to: dayEndISO(y), label: 'Kemarin', prevFrom: dayStartISO(y2), prevTo: dayEndISO(y2), prevLabel: '2 hari lalu' }
     }
+    if (period === 'custom') {
+      const a = (customFrom || today), b = (customTo || today)
+      const s = a <= b ? a : b, e = a <= b ? b : a
+      const days = Math.max(1, Math.round((Date.parse(e + 'T00:00:00') - Date.parse(s + 'T00:00:00')) / 86400000) + 1)
+      const pEnd = daysAgoISO(days), pStart = daysAgoISO(2 * days - 1)
+      return { from: dayStartISO(s), to: dayEndISO(e), label: `${days} hari`, prevFrom: dayStartISO(pStart), prevTo: dayEndISO(pEnd), prevLabel: `${days} hari sebelumnya` }
+    }
     const n = period as number
     return {
       from: dayStartISO(daysAgoISO(n - 1)), to: dayEndISO(today), label: `${n} hari`,
       prevFrom: dayStartISO(daysAgoISO(2 * n - 1)), prevTo: dayEndISO(daysAgoISO(n)), prevLabel: `${n} hari sebelumnya`,
     }
-  }, [period, today])
+  }, [period, today, customFrom, customTo])
 
   const { data: orders = [], isLoading } = useOrders({ from, to })
   const { data: prevOrders = [] } = useOrders({ from: prevFrom, to: prevTo })
@@ -70,9 +81,11 @@ export default function DashboardPage() {
   // per jam (hari ini/kemarin), per hari (7 hari), per minggu (30 hari)
   const chart = useMemo(() => {
     const hourMode = period === 'today' || period === 'yesterday'
-    const weekMode = !hourMode && (period as number) > 7
     const start = from.slice(0, 10), end = to.slice(0, 10)
     const dayCount = Math.round((Date.parse(end + 'T00:00:00') - Date.parse(start + 'T00:00:00')) / 86400000) + 1
+    // per jam (hari ini/kemarin), per hari (≤14 hari), per minggu (lebih dari itu)
+    const weekMode = !hourMode && dayCount > 14
+    const unit = hourMode ? 'jam' : weekMode ? 'minggu' : 'hari'
     const count = hourMode ? 24 : weekMode ? Math.ceil(dayCount / 7) : dayCount
 
     const buckets = (n: number) => Array.from({ length: n }, () => ({ value: 0, trx: 0, items: 0 }))
@@ -108,11 +121,12 @@ export default function DashboardPage() {
 
     return {
       labels,
+      unit,
       cur: fill(paid, Date.parse(start + 'T00:00:00')),
       prev: fill(prevPaid, Date.parse(prevFrom.slice(0, 10) + 'T00:00:00')),
     }
   }, [paid, prevPaid, from, to, prevFrom, period])
-  const unit = period === 'today' || period === 'yesterday' ? 'jam' : (period as number) <= 7 ? 'hari' : 'minggu'
+  const unit = chart.unit
   const maxVal = Math.max(1, ...chart.cur.map((b) => b.value), ...chart.prev.map((b) => b.value))
 
   // channel breakdown
@@ -176,7 +190,9 @@ export default function DashboardPage() {
   const lastClosedShift = shifts.find((s) => s.status === 'closed')
 
   return (
-    <Page title="Dashboard" actions={<RangePicker period={period} setPeriod={changePeriod} />}>
+    <Page title="Dashboard" actions={
+      <PeriodPicker period={period} onPeriod={changePeriod} customFrom={customFrom} customTo={customTo} onCustom={applyCustom} />
+    }>
       {isLoading ? (
         <div className="flex justify-center py-20"><Spinner /></div>
       ) : (
@@ -435,23 +451,4 @@ function Stat({ icon, label, value, delta, sub, tone }: { icon: React.ReactNode;
   )
 }
 
-function RangePicker({ period, setPeriod }: { period: Period; setPeriod: (p: Period) => void }) {
-  const opts: Array<{ id: Period; label: string }> = [
-    { id: 'today', label: 'Hari ini' },
-    { id: 'yesterday', label: 'Kemarin' },
-    { id: 7, label: '7 hari' },
-    { id: 30, label: '30 hari' },
-  ]
-  return (
-    <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800" role="radiogroup" aria-label="Periode laporan">
-      {opts.map((o) => (
-        <button
-          key={String(o.id)} role="radio" aria-checked={period === o.id} onClick={() => setPeriod(o.id)}
-          className={`h-9 rounded-lg px-3 text-sm font-semibold ${period === o.id ? 'bg-white text-slate-900 shadow dark:bg-slate-900 dark:text-white' : 'text-slate-500'}`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
-}
+

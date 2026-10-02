@@ -98,12 +98,12 @@ function ProductsTab() {
       ) : list.length === 0 ? (
         <EmptyState icon={<UtensilsCrossed size={24} />} title="Belum ada produk" subtitle="Tambahkan produk pertama Anda" action={<Button onClick={() => setEditingId('new')}><Plus size={16} aria-hidden /> Tambah Produk</Button>} />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((p) => {
             const hpp = hppMap[p.id] || 0
             const margin = p.price > 0 ? Math.round(((p.price - hpp) / p.price) * 100) : 0
             return (
-              <li key={p.id}>
+              <li key={p.id} className="min-w-0">
                 <Card className={`flex overflow-hidden ${!p.is_active ? 'opacity-60' : ''}`}>
                   <div className="h-24 w-24 shrink-0 bg-slate-100 dark:bg-slate-800">
                     {p.image_url ? <img src={p.image_url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-slate-300"><ImageUp size={22} aria-hidden /></div>}

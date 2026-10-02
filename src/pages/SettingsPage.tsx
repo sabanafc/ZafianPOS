@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react'
-import { Store, Receipt, PiggyBank, Moon, LayoutGrid, CalendarDays, Download, Upload, Database, Printer, RotateCw, Bluetooth, FileDown } from 'lucide-react'
+import { Store, Receipt, PiggyBank, Moon, LayoutGrid, CalendarDays, Download, Upload, Database, Printer, RotateCw, Bluetooth, FileDown, ShieldCheck } from 'lucide-react'
 import { useSettings, useUpdateSettings } from '../hooks/useSettings'
+import { pinHash, generateTotpSecret, totpNow, otpauthUrl, verifyTotp } from '../lib/security'
 import { useProducts, useIngredients, useCategories, useAllRecipes, useImportProducts, useImportIngredients, useImportRecipes } from '../hooks/useMaster'
 import { useOrdersAll } from '../hooks/useOrders'
-import { Page, Card, Input, Field, Switch, Spinner, Button } from '../components/ui'
+import { Page, Card, Input, Field, Switch, Spinner, Button, Badge } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { fmtDateTime, num } from '../lib/utils'
 import { parseCSV } from '../lib/csv'
@@ -14,7 +15,7 @@ import { TestPrint } from '../components/shift/TestPrint'
 import { PrinterSheet } from '../components/shift/PrinterSheet'
 import type { Settings } from '../types'
 
-type Tab = 'bisnis' | 'struk' | 'shift' | 'tampilan' | 'data'
+type Tab = 'bisnis' | 'struk' | 'shift' | 'tampilan' | 'data' | 'keamanan'
 
 // tab struk butuh state dialog printer
 let openPrinterDialog: (() => void) | null = null
@@ -25,6 +26,7 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Store }> = [
   { id: 'shift', label: 'Shift', icon: PiggyBank },
   { id: 'tampilan', label: 'Tampilan', icon: Moon },
   { id: 'data', label: 'Data', icon: Database },
+  { id: 'keamanan', label: 'Keamanan', icon: ShieldCheck },
 ]
 
 export default function SettingsPage() {
@@ -61,6 +63,7 @@ export default function SettingsPage() {
       {tab === 'shift' && <ShiftTab settings={settings} save={save} />}
       {tab === 'tampilan' && <DisplayTab settings={settings} save={save} />}
       {tab === 'data' && <DataCard />}
+      {tab === 'keamanan' && <SecurityTab settings={settings} save={save} />}
 
       {printerOpen && settings && (
         <PrinterSheet open={printerOpen} onClose={() => setPrinterOpen(false)} settings={settings} />
@@ -108,6 +111,16 @@ function ReceiptTab({ settings, save, onOpenPrinter }: { settings: Settings; sav
   const [margin, setMargin] = useState(String(settings.print_margin_mm ?? 3))
   const [fontScale, setFontScale] = useState(String(settings.print_font_scale ?? 1))
   const [paper, setPaper] = useState(settings.paper_width || 80)
+  // QR struk (maks 2): state lokal agar tidak kehilangan ketikan saat save
+  const [qrs, setQrs] = useState<Array<{ label: string; url: string }>>(() => {
+    const arr = (settings.receipt_qrs || []).slice(0, 2).map((q) => ({ label: q.label || '', url: q.url || '' }))
+    while (arr.length < 2) arr.push({ label: '', url: '' })
+    return arr
+  })
+  const saveQrs = (next: Array<{ label: string; url: string }>) => {
+    setQrs(next)
+    save({ receipt_qrs: next.map((q) => ({ label: q.label.trim(), url: q.url.trim() })).filter((q) => q.url) }, 'QR struk disimpan')
+  }
 
   return (
     <div className="grid max-w-3xl gap-4">
@@ -164,6 +177,38 @@ function ReceiptTab({ settings, save, onOpenPrinter }: { settings: Settings; sav
             <p className="text-sm font-semibold">Tampilkan promo di struk</p>
             <Switch checked={settings.show_promo_on_receipt} onChange={(v) => save({ show_promo_on_receipt: v }, v ? 'Promo tampil di struk' : 'Promo disembunyikan')} label="Tampilkan promo di struk" />
           </div>
+
+          {/* QR di struk (maks 2): link feedback, sosmed, dll */}
+          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+            <div className="min-w-0 pr-3">
+              <p className="text-sm font-semibold">Tampilkan QR di struk</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Maks. 2 QR — link feedback, sosmed, menu online</p>
+            </div>
+            <Switch checked={!!settings.show_qr_on_receipt} onChange={(v) => save({ show_qr_on_receipt: v }, v ? 'QR tampil di struk' : 'QR disembunyikan')} label="Tampilkan QR di struk" />
+          </div>
+          {settings.show_qr_on_receipt && (
+            <div className="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+              {qrs.map((q, i) => (
+                <div key={i} className="grid gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-brand-100 text-[11px] font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300" aria-hidden>{i + 1}</span>
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">QR {i + 1}</span>
+                  </div>
+                  <Input
+                    value={q.label} onChange={(e) => setQrs(qrs.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                    onBlur={() => saveQrs(qrs)} placeholder="Label, mis. Feedback / Instagram"
+                    aria-label={`Label QR ${i + 1}`}
+                  />
+                  <Input
+                    value={q.url} onChange={(e) => setQrs(qrs.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))}
+                    onBlur={() => saveQrs(qrs)} placeholder="https://... — dibiarkan kosong = tidak dipakai"
+                    aria-label={`URL QR ${i + 1}`}
+                  />
+                </div>
+              ))}
+              <p className="text-xs text-slate-500 dark:text-slate-400">QR tercetak di bawah teks footer struk via printer Bluetooth.</p>
+            </div>
+          )}
         </div>
       </Card>
     </div>
@@ -459,6 +504,130 @@ function DataCard() {
         </div>
       </Modal>
     </Card>
+  )
+}
+
+/** Tab keamanan: PIN & Google Authenticator untuk halaman Keuangan */
+function SecurityTab({ settings, save }: { settings: Settings; save: Saver }) {
+  const [pin1, setPin1] = useState('')
+  const [pin2, setPin2] = useState('')
+  const [busy, setBusy] = useState(false)
+  // setup TOTP
+  const [setupSecret, setSetupSecret] = useState<string | null>(null)
+  const [setupCode, setSetupCode] = useState('')
+  const [liveCode, setLiveCode] = useState('')
+
+  const savePin = async () => {
+    if (pin1.length < 4) { toast.error('PIN minimal 4 angka'); return }
+    if (pin1 !== pin2) { toast.error('PIN tidak sama'); return }
+    setBusy(true)
+    const h = await pinHash(pin1)
+    // pilih salah satu: aktifkan PIN mematikan TOTP
+    save({ finance_pin: h, totp_secret: null }, 'PIN keuangan disimpan — Google Authenticator dimatikan')
+    setBusy(false)
+    setPin1(''); setPin2('')
+  }
+
+  const beginTotp = () => {
+    const s = generateTotpSecret()
+    setSetupSecret(s)
+    setSetupCode('')
+  }
+  // tampilkan kode live untuk konfirmasi pemindaian
+  useEffect(() => {
+    if (!setupSecret) return
+    let stop = false
+    const tick = async () => {
+      const c = await totpNow(setupSecret)
+      if (!stop) setLiveCode(c)
+    }
+    tick()
+    const iv = setInterval(tick, 1000)
+    return () => { stop = true; clearInterval(iv) }
+  }, [setupSecret])
+
+  const confirmTotp = async () => {
+    if (!setupSecret) return
+    setBusy(true)
+    const ok = await verifyTotp(setupSecret, setupCode)
+    setBusy(false)
+    if (!ok) { toast.error('Kode belum cocok — coba lagi'); return }
+    // pilih salah satu: aktifkan TOTP mematikan PIN
+    save({ finance_pin: null, totp_secret: setupSecret }, 'Google Authenticator aktif — PIN dimatikan')
+    setSetupSecret(null)
+  }
+
+  const hasPin = !!settings.finance_pin
+  const hasTotp = !!settings.totp_secret
+
+  return (
+    <div className="grid max-w-3xl gap-4">
+      <Card className="p-5">
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-bold"><ShieldCheck size={16} aria-hidden /> Akses Halaman Keuangan</h2>
+        <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">Halaman Keuangan akan meminta PIN atau kode Google Authenticator setiap kali aplikasi dibuka. Pilih salah satu metode — mengaktifkan yang baru otomatis mematikan yang lama.</p>
+
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">PIN Keuangan</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{hasPin ? 'Aktif — PIN diminta saat membuka keuangan' : 'Belum diatur'}</p>
+              </div>
+              {hasPin && <Badge tone="green">Aktif</Badge>}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Input inputMode="numeric" value={pin1} onChange={(e) => setPin1(e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="PIN baru" aria-label="PIN baru" />
+              <Input inputMode="numeric" value={pin2} onChange={(e) => setPin2(e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="Ulangi PIN" aria-label="Ulangi PIN" />
+            </div>
+            <div className="mt-2 flex gap-2">
+              <Button size="sm" disabled={busy || !pin1} onClick={savePin}>{hasPin ? 'Ganti PIN' : 'Aktifkan PIN'}</Button>
+              {hasPin && (
+                <Button size="sm" variant="ghost" className="text-red-500"
+                  onClick={() => { if (confirm('Matikan PIN? Halaman keuangan terbuka tanpa PIN (kecuali TOTP aktif).')) save({ finance_pin: null, totp_secret: settings.totp_secret ?? null }, 'PIN dimatikan') }}>
+                  Matikan
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Google Authenticator (TOTP)</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{hasTotp ? 'Aktif — kode 6 digit diminta setelah PIN' : 'Belum diatur'}</p>
+              </div>
+              {hasTotp && <Badge tone="green">Aktif</Badge>}
+            </div>
+
+            {!setupSecret && (
+              <div className="mt-3 flex gap-2">
+                <Button size="sm" onClick={beginTotp}>{hasTotp ? 'Ganti Perangkat' : 'Aktifkan'}</Button>
+                {hasTotp && (
+                  <Button size="sm" variant="ghost" className="text-red-500"
+                    onClick={() => { if (confirm('Matikan Google Authenticator?')) save({ finance_pin: settings.finance_pin ?? null, totp_secret: null }, 'Google Authenticator dimatikan') }}>
+                    Matikan
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {setupSecret && (
+              <div className="mt-3 space-y-2.5">
+                <p className="text-xs text-slate-600 dark:text-slate-300">1. Di Google Authenticator pilih <strong>+ → Masukkan kode penyiapan</strong>, lalu isi:</p>
+                <code className="block break-all rounded-lg bg-slate-100 px-3 py-2 font-mono text-sm tracking-wider dark:bg-slate-800" aria-label="Secret TOTP">{setupSecret}</code>
+                <p className="text-xs text-slate-600 dark:text-slate-300">atau buka tautan: <a className="break-all font-semibold text-brand-600 underline dark:text-brand-400" href={otpauthUrl(setupSecret, 'Kasir POS', 'Zafian POS')} target="_blank" rel="noreferrer">{otpauthUrl(setupSecret, 'Kasir POS', 'Zafian POS')}</a></p>
+                <p className="text-xs text-slate-600 dark:text-slate-300">2. Ketik kode 6 digit yang tampil di aplikasi (saat ini: <strong className="font-mono tabular-nums">{liveCode}</strong>):</p>
+                <div className="flex gap-2">
+                  <Input inputMode="numeric" value={setupCode} onChange={(e) => setSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="123456" aria-label="Kode autentikator" className="max-w-[9rem] font-mono tracking-widest" />
+                  <Button size="sm" disabled={setupCode.length !== 6 || busy} onClick={confirmTotp}>Verifikasi & Aktifkan</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setSetupSecret(null)}>Batal</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+    </div>
   )
 }
 

@@ -233,6 +233,47 @@ function encodeText(t: string) {
   return enc.encode(safeAscii(t))
 }
 
+/**
+ * Bungkus teks menjadi beberapa baris dengan lebar maksimum `w` karakter
+ * (word-wrap; kata yang lebih panjang dari `w` dipotong paksa).
+ * Mencegah teks promo/footer/alamat terpotong di struk.
+ */
+export function wrapText(t: string, w: number): string[] {
+  const out: string[] = []
+  for (const raw of t.split(/\n/)) {
+    if (!raw.trim()) { out.push(''); continue }
+    let line = ''
+    for (const word of raw.split(/\s+/).filter(Boolean)) {
+      if (word.length > w) {
+        if (line) { out.push(line); line = '' }
+        for (let i = 0; i < word.length; i += w) out.push(word.slice(i, i + w))
+        continue
+      }
+      if (!line) line = word
+      else if (line.length + 1 + word.length <= w) line += ' ' + word
+      else { out.push(line); line = word }
+    }
+    if (line) out.push(line)
+  }
+  return out.length > 0 ? out : ['']
+}
+
+/**
+ * Perintah ESC/POS cetak QR code (GS ( k) — didukung hampir semua printer thermal.
+ * moduleSize 1-16; 6 cocok untuk 58mm & 80mm.
+ */
+function qrCommands(data: string, moduleSize = 6): number[] {
+  const payload = new TextEncoder().encode(data)
+  const len = payload.length + 2 // +2: panjang header fn 180
+  return [
+    GS, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00, // pilih model QR type 2
+    GS, 0x28, 0x6b, 0x03, 0x00, 0x32, 0x43, moduleSize,  // ukuran modul
+    GS, 0x28, 0x6b, 0x03, 0x00, 0x33, 0x45, 0x31,        // level koreksi error M
+    GS, 0x28, 0x6b, len & 0xff, (len >> 8) & 0xff, 0x34, 0x30, ...payload, // simpan data
+    GS, 0x28, 0x6b, 0x03, 0x00, 0x35, 0x31,              // cetak
+  ]
+}
+
 export interface BtReceiptData {
   businessName: string
   address?: string | null
@@ -251,6 +292,8 @@ export interface BtReceiptData {
   change?: number
   promoText?: string | null
   footer?: string | null
+  /** QR di bawah struk (maks 2): link feedback, sosmed, menu online, dll */
+  qrs?: Array<{ label?: string | null; url: string } | null>
   width?: number
 }
 
@@ -278,7 +321,7 @@ export function buildReceiptBytes(d: BtReceiptData): Uint8Array {
   pushBytes(new Uint8Array(setStyle({ align: 'center', bold: true, doubleHeight: true })))
   pushBytes(encodeText(d.businessName + '\n'))
   pushBytes(new Uint8Array(setStyle({ align: 'center' })))
-  if (d.address) pushBytes(encodeText(d.address.slice(0, W) + '\n'))
+  if (d.address) pushBytes(encodeText(wrapText(d.address, W).join('\n') + '\n'))
   if (d.phone) pushBytes(encodeText('Telp ' + d.phone + '\n'))
   pushBytes(encodeText('\n'))
 
@@ -292,7 +335,7 @@ export function buildReceiptBytes(d: BtReceiptData): Uint8Array {
   // items
   for (const it of d.lines) {
     pushBytes(new Uint8Array(setStyle({})))
-    pushBytes(encodeText(it.name.slice(0, W) + '\n'))
+    pushBytes(encodeText(wrapText(it.name, W).join('\n') + '\n'))
     pushBytes(encodeText(pad2(`  ${fmt(it.qty)} x ${fmt(it.price)}`, fmt(it.total), W) + '\n'))
   }
   pushBytes(encodeText('-'.repeat(W) + '\n'))
@@ -309,14 +352,29 @@ export function buildReceiptBytes(d: BtReceiptData): Uint8Array {
   if (d.paid !== undefined) pushBytes(encodeText(pad2('Dibayar', fmt(d.paid), W) + '\n'))
   if (d.change && d.change > 0) pushBytes(encodeText(pad2('Kembali', fmt(d.change), W) + '\n'))
 
-  // footer
+  // footer — teks panjang dibungkus multi-baris (tidak terpotong)
   pushBytes(encodeText('\n'))
   if (d.promoText) {
     pushBytes(new Uint8Array(setStyle({ align: 'center', bold: true })))
-    pushBytes(encodeText(d.promoText.slice(0, W) + '\n'))
+    pushBytes(encodeText(wrapText(d.promoText, W).join('\n') + '\n'))
   }
   pushBytes(new Uint8Array(setStyle({ align: 'center' })))
-  pushBytes(encodeText((d.footer || 'Terima kasih!') + '\n\n\n'))
+  pushBytes(encodeText(wrapText(d.footer || 'Terima kasih!', W).join('\n') + '\n'))
+
+  // QR code (maks 2): link feedback, sosmed, dll — dicetak di bawah footer
+  const qrs = (d.qrs || []).filter((q): q is { label?: string | null; url: string } => !!q && !!q.url).slice(0, 2)
+  if (qrs.length > 0) {
+    pushBytes(encodeText('\n'))
+    for (const q of qrs) {
+      pushBytes(new Uint8Array(setStyle({ align: 'center' })))
+      push(...qrCommands(q.url))
+      if (q.label) {
+        pushBytes(new Uint8Array(setStyle({ align: 'center' })))
+        pushBytes(encodeText(wrapText(q.label, W).join('\n') + '\n'))
+      }
+    }
+  }
+  pushBytes(encodeText('\n\n\n'))
 
   // feed & cut
   push(...cmd(0x0a, 0x0a))
@@ -349,4 +407,67 @@ export async function printTestPage(info: { businessName: string; width: number 
 export async function printReceipt(d: BtReceiptData) {
   const bytes = buildReceiptBytes(d)
   await writeBytes(bytes)
+}
+
+export interface ShiftCloseData {
+  businessName: string
+  shiftNo: string
+  openedAt: string
+  closedAt: string
+  openingFloat: number
+  cashSales: number
+  cashIn: number
+  cashOut: number
+  expected: number
+  counted: number
+  diff: number
+  ownerDeposit: number
+  width?: number
+}
+
+/** Bangun byte struk tutup shift (ringkasan kas + setoran owner + selisih) */
+export function buildShiftCloseBytes(d: ShiftCloseData): Uint8Array {
+  const W = d.width === 58 ? 32 : 48
+  const parts: number[] = []
+  const push = (...b: number[]) => parts.push(...b)
+  const pushBytes = (arr: Uint8Array) => arr.forEach((x) => parts.push(x))
+
+  push(...cmd(ESC, 0x40))
+  push(...cmd(ESC, 0x74, 0x00))
+
+  pushBytes(new Uint8Array(setStyle({ align: 'center', bold: true, doubleHeight: true })))
+  pushBytes(encodeText(d.businessName + '\n'))
+  pushBytes(new Uint8Array(setStyle({ align: 'center', bold: true })))
+  pushBytes(encodeText('TUTUP SHIFT\n\n'))
+
+  pushBytes(new Uint8Array(setStyle({})))
+  pushBytes(encodeText(pad2('Shift', d.shiftNo, W) + '\n'))
+  pushBytes(encodeText(pad2('Buka', d.openedAt, W) + '\n'))
+  pushBytes(encodeText(pad2('Tutup', d.closedAt, W) + '\n'))
+  pushBytes(encodeText('-'.repeat(W) + '\n'))
+
+  pushBytes(encodeText(pad2('Modal awal', fmt(d.openingFloat), W) + '\n'))
+  pushBytes(encodeText(pad2('Penjualan tunai', fmt(d.cashSales), W) + '\n'))
+  if (d.cashIn > 0) pushBytes(encodeText(pad2('Cash masuk', fmt(d.cashIn), W) + '\n'))
+  if (d.cashOut > 0) pushBytes(encodeText(pad2('Cash keluar', fmt(d.cashOut), W) + '\n'))
+  pushBytes(encodeText(pad2('Kas dihitung', fmt(d.counted), W) + '\n'))
+  pushBytes(encodeText('-'.repeat(W) + '\n'))
+  const diffTxt = d.diff === 0 ? 'COCOK' : (d.diff > 0 ? '+' : '') + fmt(d.diff)
+  pushBytes(encodeText(pad2('Selisih', diffTxt, W) + '\n'))
+
+  pushBytes(new Uint8Array(setStyle({ bold: true, doubleHeight: true })))
+  pushBytes(encodeText(pad2('SETORAN OWNER', fmt(d.ownerDeposit), W) + '\n\n'))
+  pushBytes(new Uint8Array(setStyle({})))
+
+  pushBytes(new Uint8Array(setStyle({ align: 'center' })))
+  pushBytes(encodeText('Modal awal tetap di drawer\nuntuk shift berikutnya\n\n\n'))
+
+  push(...cmd(0x0a, 0x0a))
+  push(...cmd(GS, 0x56, 0x42, 0x00))
+  return new Uint8Array(parts)
+}
+
+/** Cetak struk tutup shift via Bluetooth */
+export async function printShiftClose(d: ShiftCloseData) {
+  await writeBytes(buildShiftCloseBytes(d))
 }

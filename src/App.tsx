@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { FinanceGate } from './components/FinanceGate'
 
 // Kode-split per halaman: bundle awal kecil, tiap halaman dimuat saat dibutuhkan
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
@@ -64,7 +65,7 @@ function Shell() {
             <Route path="/pos" element={<PosPage />} />
             <Route path="/menu" element={<MenuPage />} />
             <Route path="/bahan" element={<IngredientsPage />} />
-            <Route path="/keuangan" element={<FinancePage />} />
+            <Route path="/keuangan" element={<FinanceGate><FinancePage /></FinanceGate>} />
             <Route path="/pengaturan" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

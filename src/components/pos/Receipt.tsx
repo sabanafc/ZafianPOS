@@ -116,6 +116,9 @@ export function ReceiptDialog({ order, settings, onClose, reprint = false }: { o
         change: order.change_amount || undefined,
         promoText: settings?.show_promo_on_receipt ? settings?.promo_text : null,
         footer: settings?.receipt_footer,
+        qrs: settings?.show_qr_on_receipt
+          ? (settings.receipt_qrs || []).slice(0, 2).map((q) => ({ label: q.label, url: q.url }))
+          : [],
         width: settings?.paper_width || 80,
       })
       toast.success('Struk terkirim ke printer')

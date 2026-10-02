@@ -64,9 +64,9 @@ export function Spinner({ className = '' }: { className?: string }) {
 export function Page({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pb-24 pt-4 md:px-8 md:pb-10" style={{ paddingTop: 'max(1rem, var(--sat))' }}>
-      <header className="mb-5 flex items-center justify-between gap-3">
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h1 className="text-xl font-bold tracking-tight md:text-2xl">{title}</h1>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
       </header>
       {children}
     </div>
