@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Lock, LogIn, TrendingUp, TrendingDown, ArrowDownToLine, ArrowUpFromLine, Banknote } from 'lucide-react'
+import { Lock, LogIn, TrendingUp, TrendingDown, ArrowDownToLine, ArrowUpFromLine, Banknote, HandCoins } from 'lucide-react'
 import { Modal } from '../Modal'
 import { Button, Input, Field, Spinner } from '../ui'
 import { useActiveShift, useShiftSummary, useOpenShift, useShiftCash, useCloseShift } from '../../hooks/useOrders'
@@ -23,6 +23,8 @@ export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open
   }, [open, mode, settings?.default_float])
 
   const expected = (sum?.cashSales || 0) + (sum?.cashIn || 0) - (sum?.cashOut || 0) + (shift?.opening_float || 0)
+  // uang yang ditarik dari drawer & diserahkan ke owner = kas di drawer − modal awal
+  const withdraw = Math.max(0, expected - (shift?.opening_float || 0))
 
   const handleOpen = () => {
     const v = Number(float) || 0
@@ -114,6 +116,24 @@ export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open
                     <dd className="font-bold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(expected)}</dd>
                   </div>
                 </dl>
+                <p className="mt-2 text-[11px] leading-snug text-slate-400 dark:text-slate-500">
+                  = Penjualan tunai {fmtID(sum?.cashSales || 0)} + Modal awal {fmtID(shift.opening_float)}
+                  {(sum?.cashIn || 0) > 0 || (sum?.cashOut || 0) > 0
+                    ? ` + Cash in ${fmtID(sum?.cashIn || 0)} − Cash out ${fmtID(sum?.cashOut || 0)}`
+                    : ''}
+                </p>
+              </div>
+
+              {/* Uang yang ditarik dari drawer untuk owner */}
+              <div className="rounded-2xl bg-amber-50 p-4 dark:bg-amber-900/20">
+                <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                  <HandCoins size={14} aria-hidden /> Ditarik & diserahkan ke owner
+                </p>
+                <p className="mt-0.5 text-2xl font-extrabold tabular-nums text-amber-800 dark:text-amber-200">{fmtID(withdraw)}</p>
+                <p className="mt-1.5 text-xs leading-snug text-amber-700/80 dark:text-amber-200/70">
+                  Kas di drawer dikurangi modal awal ({fmtID(shift.opening_float)}) — jumlah ini yang ditarik dan diserahkan ke owner.
+                  Modal awal tetap dibiarkan di drawer untuk shift berikutnya.
+                </p>
               </div>
 
               {cash && cash.length > 0 && (

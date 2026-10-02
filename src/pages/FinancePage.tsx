@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Plus, Trash2, Download, TrendingUp, TrendingDown, Wallet, Pencil } from 'lucide-react'
-import { useOrders, useFinanceEntries, useSaveFinanceEntry, useDeleteFinanceEntry } from '../hooks/useOrders'
+import { Plus, Trash2, Download, TrendingUp, TrendingDown, Wallet, Pencil, HandCoins } from 'lucide-react'
+import { useOrders, useFinanceEntries, useSaveFinanceEntry, useDeleteFinanceEntry, useActiveShift, useShiftSummary } from '../hooks/useOrders'
 import { Page, Card, Button, IconButton, Input, Select, Field, Badge, EmptyState, Spinner } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { fmtID, fmtDate, todayISO, daysAgoISO, dayStartISO, dayEndISO } from '../lib/utils'
@@ -9,14 +9,33 @@ import { downloadCSV } from '../lib/csv'
 import { isOnlineChannel, type FinanceEntry } from '../types'
 import { toast } from '../lib/toast'
 
+type Period = 'today' | 'yesterday' | 7 | 30
+
 export default function FinancePage() {
-  const [from, setFrom] = useState(daysAgoISO(29))
-  const [to, setTo] = useState(todayISO())
+  const [period, setPeriod] = useState<Period>(30)
+  const today = todayISO()
+
+  // Rentang periode — pilihan sama dengan dashboard
+  const { from, to, label } = useMemo(() => {
+    if (period === 'today') return { from: today, to: today, label: 'Hari ini' }
+    if (period === 'yesterday') { const y = daysAgoISO(1); return { from: y, to: y, label: 'Kemarin' } }
+    const n = period as number
+    return { from: daysAgoISO(n - 1), to: today, label: `${n} hari` }
+  }, [period, today])
+
   const { data: orders = [], isLoading } = useOrders({ from: dayStartISO(from), to: dayEndISO(to) })
   const { data: entries = [] } = useFinanceEntries({ from, to })
+  const { data: shift } = useActiveShift()
+  const { data: shiftSum } = useShiftSummary(shift?.id)
   const saveEntry = useSaveFinanceEntry()
   const delEntry = useDeleteFinanceEntry()
   const [entryModal, setEntryModal] = useState<Partial<FinanceEntry> | null>(null)
+
+  // Kas di drawer shift aktif: penjualan tunai + modal awal + cash in − cash out
+  const drawerCash = shift
+    ? (shiftSum?.cashSales || 0) + (shiftSum?.cashIn || 0) - (shiftSum?.cashOut || 0) + (shift.opening_float || 0)
+    : null
+  const ownerWithdraw = drawerCash !== null ? Math.max(0, drawerCash - (shift!.opening_float || 0)) : null
 
   const paid = useMemo(() => orders.filter((o) => o.status === 'paid'), [orders])
   const revenue = paid.reduce((s, o) => s + o.total, 0)
@@ -64,11 +83,44 @@ export default function FinancePage() {
       }
     >
       <div className="space-y-4">
-        {/* Filter tanggal */}
-        <Card className="flex flex-wrap items-end gap-3 p-4">
-          <Field label="Dari"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-40" /></Field>
-          <Field label="Sampai"><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-40" /></Field>
-        </Card>
+        {/* Filter periode cepat (sama dengan dashboard) */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800" role="radiogroup" aria-label="Periode laporan keuangan">
+            {([
+              ['today', 'Hari ini'],
+              ['yesterday', 'Kemarin'],
+              [7, '7 hari'],
+              [30, '30 hari'],
+            ] as Array<[Period, string]>).map(([p, lbl]) => (
+              <button
+                key={String(p)} role="radio" aria-checked={period === p} onClick={() => setPeriod(p)}
+                className={`h-9 rounded-lg px-3 text-sm font-semibold ${period === p ? 'bg-white text-slate-900 shadow dark:bg-slate-900 dark:text-white' : 'text-slate-500'}`}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs text-slate-400">Periode {label} · {fmtDate(from)} – {fmtDate(to)}</span>
+        </div>
+
+        {/* Kas drawer shift aktif — uang yang ditarik untuk owner */}
+        {drawerCash !== null && (
+          <Card className="flex flex-wrap items-center gap-4 border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/50 dark:bg-amber-900/10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" aria-hidden>
+              <HandCoins size={19} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold">Kas di drawer shift aktif: {fmtID(drawerCash)}</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                Uang yang ditarik & diserahkan ke owner = kas drawer − modal awal ({fmtID(shift!.opening_float)})
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Ditarik untuk owner</p>
+              <p className="text-xl font-extrabold tabular-nums text-amber-800 dark:text-amber-200">{fmtID(ownerWithdraw!)}</p>
+            </div>
+          </Card>
+        )}
 
         {isLoading ? (
           <div className="flex justify-center py-16"><Spinner /></div>
