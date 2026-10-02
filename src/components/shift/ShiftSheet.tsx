@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Lock, LogIn, TrendingUp, TrendingDown, ArrowDownToLine, ArrowUpFromLine, Banknote, HandCoins } from 'lucide-react'
+import { Lock, LogIn, TrendingUp, TrendingDown, ArrowDownToLine, ArrowUpFromLine, Banknote, HandCoins, Calculator } from 'lucide-react'
 import { Modal } from '../Modal'
 import { Button, Input, Field, Spinner } from '../ui'
 import { useActiveShift, useShiftSummary, useOpenShift, useShiftCash, useCloseShift } from '../../hooks/useOrders'
 import { useSettings } from '../../hooks/useSettings'
 import { fmtID, fmtTime } from '../../lib/utils'
 import { toast } from '../../lib/toast'
+
+// Pecahan uang Rupiah, dari lembar terbesar ke koin terkecil
+const DENOMS = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100]
 
 export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open' | 'close'; onClose: () => void }) {
   const { settings } = useSettings()
@@ -17,6 +20,16 @@ export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open
 
   const [float, setFloat] = useState('350000')
   const [counted, setCounted] = useState('')
+  // jumlah lembar/koin per pecahan untuk menghitung kas fisik
+  const [denoms, setDenoms] = useState<Record<number, string>>({})
+  const denomTotal = DENOMS.reduce((s, d) => s + (Number(denoms[d]) || 0) * d, 0)
+  const setDenom = (d: number, v: string) => setDenoms((prev) => ({ ...prev, [d]: v }))
+
+  // total pecahan otomatis mengisi kolom "Kas fisik dihitung"
+  useEffect(() => {
+    if (denomTotal > 0) setCounted(String(denomTotal))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [denomTotal])
 
   useEffect(() => {
     if (open && mode === 'open' && settings?.default_float) setFloat(String(settings.default_float))
@@ -135,6 +148,35 @@ export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open
                   Modal awal tetap dibiarkan di drawer untuk shift berikutnya.
                 </p>
               </div>
+
+              {/* Kalkulator pecahan — ketik jumlah lembar/koin, total masuk ke kolom kas fisik */}
+              <details className="rounded-2xl border border-slate-200 dark:border-slate-800">
+                <summary className="flex cursor-pointer select-none items-center gap-2 px-4 py-3 text-sm font-bold">
+                  <Calculator size={16} className="text-brand-600" aria-hidden /> Hitung kas per pecahan
+                  {denomTotal > 0 && <span className="ml-auto text-xs font-semibold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(denomTotal)}</span>}
+                </summary>
+                <div className="space-y-2.5 px-4 pb-4">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Isi jumlah lembar/koin tiap pecahan — totalnya otomatis mengisi kolom "Kas fisik dihitung".</p>
+                  <div className="grid gap-1.5 sm:grid-cols-2">
+                    {DENOMS.map((d) => (
+                      <div key={d} className="flex items-center gap-1.5">
+                        <span className="w-14 shrink-0 text-xs font-semibold text-slate-500" aria-hidden>{d >= 1000 ? `${d / 1000}rb` : d}</span>
+                        <Input
+                          inputMode="numeric" pattern="[0-9]*" value={denoms[d] ?? ''}
+                          onChange={(e) => setDenom(d, e.target.value.replace(/\D/g, ''))}
+                          placeholder="0" aria-label={`Jumlah pecahan ${d}`}
+                          className="h-9 min-w-0 flex-1 px-2 text-sm"
+                        />
+                        <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-slate-400" aria-hidden>{fmtID((Number(denoms[d]) || 0) * d)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-brand-50 px-3 py-2 text-sm dark:bg-brand-900/20">
+                    <span className="font-semibold">Total kas dihitung</span>
+                    <span className="font-bold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(denomTotal)}</span>
+                  </div>
+                </div>
+              </details>
 
               {cash && cash.length > 0 && (
                 <div className="max-h-32 space-y-1.5 overflow-y-auto" aria-label="Riwayat cash in/out">

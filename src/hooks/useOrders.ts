@@ -144,14 +144,28 @@ export function useCloseShift() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ shiftId, counted }: { shiftId: string; counted: number }) => {
+      const { data: sh, error: e0 } = await supabase.from('shifts').select('opening_float').eq('id', shiftId).single()
+      if (e0) throw e0
       const { data, error } = await supabase.rpc('close_shift', { p_shift: shiftId, p_counted: counted })
       if (error) throw error
+      // catat setoran ke owner (kas drawer - modal awal) sebagai cash out
+      // agar riwayat setoran bisa dilacak per shift
+      const expected = Number(data) || 0
+      const opening = (sh as { opening_float: number } | null)?.opening_float || 0
+      const withdraw = Math.max(0, expected - opening)
+      if (withdraw > 0) {
+        // non-fatal: shift sudah tertutup, kegagalan mencatat setoran tidak membatalkan penutupan
+        await supabase
+          .from('cash_movements')
+          .insert({ shift_id: shiftId, type: 'out', amount: withdraw, note: 'Setoran ke owner' })
+      }
       return data as number
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['shift-active'] })
       qc.invalidateQueries({ queryKey: ['shift-history'] })
       qc.invalidateQueries({ queryKey: ['orders'] })
+      qc.invalidateQueries({ queryKey: ['cash-movements'] })
     },
   })
 }
