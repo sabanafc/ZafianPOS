@@ -53,7 +53,21 @@ export default function PosPage() {
 
   const pick = (p: Product) => {
     if (!shift) { setShiftGate(true); return }
+    if (p.track_stock) {
+      const inCart = lines.find((l) => l.productId === p.id)?.qty || 0
+      if (inCart + 1 > p.stock) { toast.error(`Stok ${p.name} tinggal ${p.stock.toLocaleString('id-ID')}`); return }
+    }
     add({ id: p.id, name: p.name, price: p.price, image_url: p.image_url })
+  }
+
+  // jaga qty di keranjang tidak melebihi stok menu
+  const changeQty = (productId: string, qty: number) => {
+    const p = products.find((x) => x.id === productId)
+    if (p?.track_stock && qty > p.stock) {
+      toast.error(`Stok ${p.name} tinggal ${p.stock.toLocaleString('id-ID')}`)
+      return
+    }
+    setQty(productId, qty)
   }
 
   const submitPayment = async (payment: PaymentMethod, paid: number) => {
@@ -148,7 +162,7 @@ export default function PosPage() {
         >
           <CartList
             lines={lines} discount={discount} settings={settings} held={held} online={online}
-            onQty={setQty} onRemove={remove} onDiscount={setDiscount}
+            onQty={changeQty} onRemove={remove} onDiscount={setDiscount}
             onHold={doHold} onClear={doClear} onResumeHold={resumeHold} onDeleteHold={deleteHold}
           />
           <Button size="lg" className="mt-3 w-full" disabled={lines.length === 0 || createOrder.isPending} onClick={() => setPayOpen(true)}>
@@ -172,7 +186,7 @@ export default function PosPage() {
         <div className="flex min-h-[50dvh] flex-col">
           <CartList
             lines={lines} discount={discount} settings={settings} held={held} online={online}
-            onQty={setQty} onRemove={remove} onDiscount={setDiscount}
+            onQty={changeQty} onRemove={remove} onDiscount={setDiscount}
             onHold={doHold} onClear={doClear}
             onResumeHold={(id) => { resumeHold(id); setCartOpen(false) }}
             onDeleteHold={deleteHold}

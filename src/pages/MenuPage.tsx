@@ -1,9 +1,11 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
-import { Plus, Pencil, Trash2, ImageUp, UtensilsCrossed, Tags, ChefHat, Search, GripVertical, Power, Flame } from 'lucide-react'
+import { Plus, Pencil, Trash2, ImageUp, UtensilsCrossed, Tags, ChefHat, Search, GripVertical, Flame, Package, Layers, RefreshCw, Minus } from 'lucide-react'
 import {
   useProducts, useCategories, useSaveProduct, useDeleteProduct, useAllRecipes,
   useSaveCategory, useDeleteCategory, useReorderCategories, useSetRecipe, useIngredients, useRecipe, useToggleProduct,
-  useProductSales,
+  useProductSales, useAdjustProductStock,
+  usePackageItems, usePackageIngredients, useSetPackageItems, useSetPackageIngredients,
+  useAllPackageItems, useAllPackageIngredients,
 } from '../hooks/useMaster'
 import { useSettings } from '../hooks/useSettings'
 import { uploadProductImage } from '../lib/storage'
@@ -43,25 +45,42 @@ function ProductsTab() {
   const { data: products = [], isLoading } = useProducts()
   const { data: categories = [] } = useCategories()
   const { data: recipes = [] } = useAllRecipes()
+  const { data: pkgIngredients = [] } = useAllPackageIngredients()
+  const { data: pkgItems = [] } = useAllPackageItems()
   const { settings } = useSettings()
   const { data: sales = new Map() } = useProductSales(settings?.bestseller_days ?? 30)
   const del = useDeleteProduct()
   const toggle = useToggleProduct()
+  const adjustStock = useAdjustProductStock()
   const [q, setQ] = useState('')
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
   const [recipeForId, setRecipeForId] = useState<string | null>(null)
+  const [packageForId, setPackageForId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Product | null>(null)
 
+  // HPP: menu biasa dari resep bahan; paket dari bahan efektif paket
   const hppMap = useMemo(() => {
     const m: Record<string, number> = {}
+    const pkgIds = new Set(products.filter((p) => p.is_package).map((p) => p.id))
     for (const r of recipes as Array<{ product_id: string; qty: number; ingredient?: { cost_per_unit: number } }>) {
+      if (pkgIds.has(r.product_id)) continue
       m[r.product_id] = (m[r.product_id] || 0) + r.qty * (r.ingredient?.cost_per_unit || 0)
     }
+    for (const pi of pkgIngredients as Array<{ package_id: string; qty: number; ingredient?: { cost_per_unit: number } }>) {
+      m[pi.package_id] = (m[pi.package_id] || 0) + pi.qty * (pi.ingredient?.cost_per_unit || 0)
+    }
     return m
-  }, [recipes])
+  }, [recipes, pkgIngredients, products])
+
+  const componentCount = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const it of pkgItems) m[it.package_id] = (m[it.package_id] || 0) + 1
+    return m
+  }, [pkgItems])
 
   const editing = editingId === 'new' ? {} : products.find((p) => p.id === editingId) || null
   const recipeFor = products.find((p) => p.id === recipeForId) || null
+  const packageFor = products.find((p) => p.id === packageForId) || null
   const catName = (id: string | null) => categories.find((c) => c.id === id)?.name || '—'
   const list = products.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()))
 
@@ -111,8 +130,13 @@ function ProductsTab() {
                   <div className="flex min-w-0 flex-1 flex-col p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-bold">{p.name}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{catName(p.category_id)}</p>
+                        <p className="flex items-center gap-1.5 truncate text-sm font-bold">
+                          <span className="truncate">{p.name}</span>
+                          {p.is_package && <Badge tone="brand">Paket</Badge>}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {catName(p.category_id)}{p.is_package && ` · ${componentCount[p.id] || 0} menu`}
+                        </p>
                       </div>
                       <Switch checked={p.is_active} onChange={(v) => toggle.mutate({ id: p.id, is_active: v })} label={`${p.is_active ? 'Sembunyikan' : 'Tampilkan'} ${p.name} di kasir`} />
                     </div>
@@ -120,9 +144,28 @@ function ProductsTab() {
                     <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
                       HPP {fmtID(hpp)} · <span className={margin >= 50 ? 'font-semibold text-green-700 dark:text-green-400' : margin >= 25 ? 'font-semibold text-amber-600' : 'font-semibold text-red-600'}>margin {margin}%</span>
                     </p>
+                    {p.track_stock && (
+                      <div className="mt-1 flex items-center gap-1.5 text-xs">
+                        <span className={`font-semibold tabular-nums ${p.stock <= 0 ? 'text-red-600 dark:text-red-400' : p.stock <= p.min_stock ? 'text-amber-600' : 'text-slate-500 dark:text-slate-400'}`}>
+                          Stok {p.stock.toLocaleString('id-ID')}
+                        </span>
+                        <button type="button" onClick={() => adjustStock.mutate({ id: p.id, delta: 1 })} aria-label={`Tambah stok ${p.name}`}
+                          className="flex h-5 w-5 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                          <Plus size={12} aria-hidden />
+                        </button>
+                        <button type="button" onClick={() => adjustStock.mutate({ id: p.id, delta: -1 })} aria-label={`Kurangi stok ${p.name}`}
+                          className="flex h-5 w-5 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                          <Minus size={12} aria-hidden />
+                        </button>
+                      </div>
+                    )}
                     <div className="mt-auto flex gap-1 pt-2">
                       <IconButton label={`Edit ${p.name}`} size="sm" variant="secondary" onClick={() => setEditingId(p.id)}><Pencil size={14} aria-hidden /></IconButton>
-                      <IconButton label={`Resep ${p.name}`} size="sm" variant="secondary" onClick={() => setRecipeForId(p.id)}><ChefHat size={14} aria-hidden /></IconButton>
+                      {p.is_package ? (
+                        <IconButton label={`Atur paket ${p.name}`} size="sm" variant="secondary" onClick={() => setPackageForId(p.id)}><Layers size={14} aria-hidden /></IconButton>
+                      ) : (
+                        <IconButton label={`Resep ${p.name}`} size="sm" variant="secondary" onClick={() => setRecipeForId(p.id)}><ChefHat size={14} aria-hidden /></IconButton>
+                      )}
                       <IconButton label={`Hapus ${p.name}`} size="sm" variant="ghost" className="text-red-500" onClick={() => setDeleting(p)}><Trash2 size={14} aria-hidden /></IconButton>
                     </div>
                   </div>
@@ -136,6 +179,7 @@ function ProductsTab() {
         <ProductFormModal key={editingId} product={editing!} onClose={() => setEditingId(null)} categories={categories} />
       )}
       {recipeFor && <RecipeModal key={recipeFor.id} product={recipeFor} onClose={() => setRecipeForId(null)} />}
+      {packageFor && <PackageModal key={packageFor.id} product={packageFor} onClose={() => setPackageForId(null)} />}
       <ConfirmDialog
         open={!!deleting} onClose={() => setDeleting(null)}
         title="Hapus produk?" message={`"${deleting?.name}" akan dihapus beserta resepnya. Transaksi lama tetap tersimpan.`}
@@ -152,6 +196,10 @@ function ProductFormModal({ product, onClose, categories }: { product: Partial<P
   const [price, setPrice] = useState(product?.price ? String(product.price) : '')
   const [catId, setCatId] = useState(product?.category_id || '')
   const [active, setActive] = useState(product?.is_active ?? true)
+  const [track, setTrack] = useState(product?.track_stock ?? false)
+  const [stock, setStock] = useState(product?.stock ? String(product.stock) : '')
+  const [minStock, setMinStock] = useState(product?.min_stock ? String(product.min_stock) : '')
+  const [isPkg, setIsPkg] = useState(product?.is_package ?? false)
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(product?.image_url || null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -173,7 +221,12 @@ function ProductFormModal({ product, onClose, categories }: { product: Partial<P
         image_url = await uploadProductImage(file, tmpId)
       }
       save.mutate(
-        { id: product.id, name: name.trim(), price: Number(price) || 0, category_id: catId || null, image_url, is_active: active },
+        {
+          id: product.id, name: name.trim(), price: Number(price) || 0, category_id: catId || null, image_url, is_active: active,
+          stock: Number(stock.replace(',', '.')) || 0,
+          min_stock: Number(minStock.replace(',', '.')) || 0,
+          track_stock: track, is_package: isPkg,
+        },
         { onSuccess: () => { toast.success(isNew ? 'Produk ditambahkan' : 'Produk disimpan'); onClose() }, onError: (e: Error) => toast.error(e.message) },
       )
     } catch (e) {
@@ -230,6 +283,29 @@ function ProductFormModal({ product, onClose, categories }: { product: Partial<P
           <span className="text-sm font-medium">Tampilkan di kasir</span>
           <Switch checked={active} onChange={setActive} label="Tampilkan di kasir" />
         </div>
+        <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+          <span className="text-sm font-medium">Lacak stok menu</span>
+          <Switch checked={track} onChange={setTrack} label="Lacak stok menu" />
+        </div>
+        {track && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Stok saat ini">
+              <Input inputMode="decimal" value={stock} onChange={(e) => setStock(e.target.value.replace(/[^0-9.,]/g, ''))} placeholder="0" />
+            </Field>
+            <Field label="Stok minimum">
+              <Input inputMode="decimal" value={minStock} onChange={(e) => setMinStock(e.target.value.replace(/[^0-9.,]/g, ''))} placeholder="0" />
+            </Field>
+          </div>
+        )}
+        <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+          <span className="text-sm font-medium">Menu ini paket</span>
+          <Switch checked={isPkg} onChange={setIsPkg} label="Menu ini paket gabungan" />
+        </div>
+        {isPkg && (
+          <p className="rounded-xl bg-brand-50 p-3 text-xs text-brand-700 dark:bg-brand-900/30 dark:text-brand-200">
+            Simpan dulu, lalu atur isi paket dari tombol <strong>Paket</strong> di kartu menu. HPP paket dihitung dari bahan gabungan menu komponen.
+          </p>
+        )}
       </div>
     </Modal>
   )
@@ -313,6 +389,158 @@ function RecipeModal({ product, onClose }: { product: Product; onClose: () => vo
           )
         })}
         <Button variant="secondary" className="w-full" onClick={addRow}><Plus size={16} aria-hidden /> Tambah Bahan</Button>
+      </div>
+    </Modal>
+  )
+}
+
+// ================= PAKET (gabungan menu) =================
+const round3 = (n: number) => Math.round(n * 1000) / 1000
+
+function PackageModal({ product, onClose }: { product: Product; onClose: () => void }) {
+  const { data: products = [] } = useProducts()
+  const { data: ingredients = [] } = useIngredients()
+  const { data: recipes = [] } = useAllRecipes()
+  const { data: allPkgIngredients = [] } = useAllPackageIngredients()
+  const { data: existingItems = [], isLoading: loadingItems } = usePackageItems(product.id)
+  const { data: existingIng = [], isLoading: loadingIng } = usePackageIngredients(product.id)
+  const setItems = useSetPackageItems()
+  const setIng = useSetPackageIngredients()
+
+  const [rows, setRows] = useState<Array<{ component_id: string; qty: string }> | null>(null)
+  const [ingRows, setIngRows] = useState<Array<{ ingredient_id: string; qty: string }> | null>(null)
+  const [split, setSplit] = useState(false)
+
+  const comps = rows ?? existingItems.map((r) => ({ component_id: r.component_id, qty: String(r.qty) }))
+  const candidates = products.filter((p) => p.id !== product.id)
+
+  /** Susun bahan dari menu komponen: paket → bahan efektifnya; menu biasa → resepnya.
+   *  split=true → satu baris per menu (bahan sama tampil terpisah). */
+  const derive = (list: Array<{ component_id: string; qty: string }>): Array<{ ingredient_id: string; qty: string }> => {
+    const merged = new Map<string, number>()
+    const out: Array<{ ingredient_id: string; qty: string }> = []
+    for (const c of list) {
+      const prod = products.find((p) => p.id === c.component_id)
+      const q = Number(c.qty.replace(',', '.')) || 0
+      if (!prod || q <= 0) continue
+      const src = prod.is_package
+        ? allPkgIngredients.filter((pi) => pi.package_id === prod.id).map((pi) => ({ ingredient_id: pi.ingredient_id, qty: pi.qty }))
+        : recipes.filter((r) => r.product_id === prod.id).map((r) => ({ ingredient_id: r.ingredient_id, qty: r.qty }))
+      for (const s of src) {
+        if (split) out.push({ ingredient_id: s.ingredient_id, qty: String(round3(s.qty * q)) })
+        else merged.set(s.ingredient_id, (merged.get(s.ingredient_id) || 0) + s.qty * q)
+      }
+    }
+    return split ? out : [...merged.entries()].map(([ingredient_id, qty]) => ({ ingredient_id, qty: String(round3(qty)) }))
+  }
+
+  const showIng: Array<{ ingredient_id: string; qty: string }> = ingRows
+    ?? (existingIng.length ? existingIng.map((r) => ({ ingredient_id: r.ingredient_id, qty: String(r.qty) })) : derive(comps))
+
+  const setComp = (i: number, patch: Partial<{ component_id: string; qty: string }>) =>
+    setRows(comps.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  const addComp = () => setRows([...comps, { component_id: '', qty: '1' }])
+  const removeComp = (i: number) => setRows(comps.filter((_, j) => j !== i))
+
+  const setIngRow = (i: number, patch: Partial<{ ingredient_id: string; qty: string }>) =>
+    setIngRows(showIng.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  const addIngRow = () => setIngRows([...showIng, { ingredient_id: '', qty: '' }])
+  const removeIngRow = (i: number) => setIngRows(showIng.filter((_, j) => j !== i))
+  const recalc = () => { setIngRows(derive(comps)); toast.info('Bahan paket dihitung ulang dari menu komponen') }
+
+  const num = (s: string) => Number(s.replace(',', '.')) || 0
+  const hpp = showIng.reduce((s, r) => s + num(r.qty) * (ingredients.find((x) => x.id === r.ingredient_id)?.cost_per_unit || 0), 0)
+  const margin = product.price > 0 ? Math.round(((product.price - hpp) / product.price) * 100) : 0
+  const busy = setItems.isPending || setIng.isPending
+
+  if (loadingItems || loadingIng) return <Modal open onClose={onClose} title="Paket"><Spinner /></Modal>
+
+  const submit = async () => {
+    const items = comps.filter((c) => c.component_id && num(c.qty) > 0).map((c) => ({ component_id: c.component_id, qty: num(c.qty) }))
+    const ings = showIng.filter((r) => r.ingredient_id && num(r.qty) > 0).map((r) => ({ ingredient_id: r.ingredient_id, qty: num(r.qty) }))
+    try {
+      await setItems.mutateAsync({ packageId: product.id, items })
+      await setIng.mutateAsync({ packageId: product.id, items: ings })
+      toast.success('Paket disimpan — HPP diperbarui')
+      onClose()
+    } catch (e) {
+      toast.error((e as Error).message)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`Paket · ${product.name}`} size="lg"
+      footer={
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-500 dark:text-slate-400">HPP paket per porsi</span>
+            <span className="font-bold tabular-nums">
+              {fmtID(hpp)}{' '}
+              <span className={margin >= 50 ? 'text-green-600' : margin >= 25 ? 'text-amber-600' : 'text-red-600'}>· margin {margin}%</span>
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={onClose}>Batal</Button>
+            <Button className="flex-[2]" onClick={submit} disabled={busy}>{busy ? <Spinner className="text-white" /> : null} Simpan Paket</Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="space-y-5">
+        {/* Isi paket: menu komponen */}
+        <section>
+          <h3 className="mb-1.5 flex items-center gap-1.5 text-sm font-bold"><Package size={15} aria-hidden /> Menu komponen</h3>
+          <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_5rem_2.25rem] items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+            <span>Menu</span><span className="text-right">Jumlah</span><span aria-hidden />
+          </div>
+          <div className="space-y-2">
+            {comps.length === 0 && <p className="py-3 text-center text-sm text-slate-500">Belum ada menu. Tambahkan menu penyusun paket.</p>}
+            {comps.map((c, i) => (
+              <div key={i} className="grid grid-cols-[minmax(0,1fr)_5rem_2.25rem] items-center gap-2">
+                <Select value={c.component_id} onChange={(e) => setComp(i, { component_id: e.target.value })} aria-label={`Menu ${i + 1}`} className="w-full min-w-0">
+                  <option value="">— pilih menu —</option>
+                  {candidates.map((p) => <option key={p.id} value={p.id}>{p.name}{p.is_package ? ' (paket)' : ''}</option>)}
+                </Select>
+                <Input inputMode="decimal" value={c.qty} onChange={(e) => setComp(i, { qty: e.target.value.replace(/[^0-9.,]/g, '') })} placeholder="1" aria-label={`Jumlah menu ${i + 1}`} className="w-full text-right" />
+                <IconButton label="Hapus menu" size="sm" variant="ghost" className="mx-auto text-red-500" onClick={() => removeComp(i)}><Trash2 size={14} aria-hidden /></IconButton>
+              </div>
+            ))}
+            <Button variant="secondary" className="w-full" onClick={addComp}><Plus size={16} aria-hidden /> Tambah Menu</Button>
+          </div>
+        </section>
+
+        {/* Bahan efektif paket (bisa disesuaikan manual) */}
+        <section>
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="flex items-center gap-1.5 text-sm font-bold"><ChefHat size={15} aria-hidden /> Bahan paket (HPP)</h3>
+            <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+              Pisah per menu
+            </label>
+          </div>
+          <Button variant="secondary" className="mb-2 w-full" onClick={recalc}><RefreshCw size={15} aria-hidden /> Hitung ulang dari menu</Button>
+          <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_5rem_3rem_2.25rem] items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+            <span>Bahan</span><span className="text-right">Jumlah</span><span className="text-center">Satuan</span><span aria-hidden />
+          </div>
+          <div className="space-y-2">
+            {showIng.length === 0 && <p className="py-3 text-center text-sm text-slate-500">Belum ada bahan. Hitung ulang dari menu atau tambah manual.</p>}
+            {showIng.map((r, i) => {
+              const ing = ingredients.find((x) => x.id === r.ingredient_id)
+              return (
+                <div key={i} className="grid grid-cols-[minmax(0,1fr)_5rem_3rem_2.25rem] items-center gap-2">
+                  <Select value={r.ingredient_id} onChange={(e) => setIngRow(i, { ingredient_id: e.target.value })} aria-label={`Bahan ${i + 1}`} className="w-full min-w-0">
+                    <option value="">— pilih bahan —</option>
+                    {ingredients.filter((x) => x.is_active || x.id === r.ingredient_id).map((x) => <option key={x.id} value={x.id}>{x.name} ({x.unit})</option>)}
+                  </Select>
+                  <Input inputMode="decimal" value={r.qty} onChange={(e) => setIngRow(i, { qty: e.target.value.replace(/[^0-9.,]/g, '') })} placeholder="0" aria-label={`Jumlah ${ing?.name || ''}`} className="w-full text-right" />
+                  <span className="truncate text-center text-xs text-slate-500">{ing?.unit || '—'}</span>
+                  <IconButton label="Hapus baris" size="sm" variant="ghost" className="mx-auto text-red-500" onClick={() => removeIngRow(i)}><Trash2 size={14} aria-hidden /></IconButton>
+                </div>
+              )
+            })}
+            <Button variant="secondary" className="w-full" onClick={addIngRow}><Plus size={16} aria-hidden /> Tambah Bahan</Button>
+          </div>
+        </section>
       </div>
     </Modal>
   )

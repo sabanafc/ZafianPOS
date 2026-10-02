@@ -2,7 +2,15 @@ export type Channel = 'dine_in' | 'takeaway' | 'gofood' | 'grabfood' | 'shopeefo
 export type PaymentMethod = 'cash' | 'qris' | 'transfer'
 
 export interface Category { id: string; name: string; sort_order: number; is_active: boolean }
-export interface Product { id: string; category_id: string | null; name: string; price: number; image_url: string | null; is_active: boolean }
+export interface Product {
+  id: string; category_id: string | null; name: string; price: number; image_url: string | null; is_active: boolean
+  stock: number; min_stock: number; track_stock: boolean; is_package: boolean
+}
+export interface PackageItem { id: string; package_id: string; component_id: string; qty: number; component?: Product }
+export interface PackageIngredient {
+  id: string; package_id: string; ingredient_id: string; qty: number; source: string | null; note: string | null
+  ingredient?: Ingredient
+}
 export interface Ingredient {
   id: string; name: string; unit: string; stock: number; min_stock: number; cost_per_unit: number
   purchase_unit: string | null; purchase_qty: number | null; purchase_price: number | null

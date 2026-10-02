@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import type { Category, Product, Ingredient, RecipeItem } from '../types'
+import type { Category, Product, Ingredient, RecipeItem, PackageItem, PackageIngredient } from '../types'
 
 // ---------- Kategori ----------
 export function useCategories() {
@@ -92,6 +92,10 @@ export function useSaveProduct() {
         category_id: p.category_id || null,
         image_url: p.image_url || null,
         is_active: p.is_active ?? true,
+        stock: p.stock ?? 0,
+        min_stock: p.min_stock ?? 0,
+        track_stock: p.track_stock ?? false,
+        is_package: p.is_package ?? false,
       }
       const { error } = p.id
         ? await supabase.from('products').update(payload).eq('id', p.id)
@@ -406,6 +410,117 @@ export function useAllRecipes() {
       const { data, error } = await supabase.from('recipe_items').select('*, ingredient:ingredients(*)')
       if (error) throw error
       return data as RecipeItem[]
+    },
+  })
+}
+
+// ---------- Stok menu (manual) ----------
+/** Tambah/kurangi stok menu secara manual (mis. hasil produksi, opname). */
+export function useAdjustProductStock() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, delta, track_stock }: { id: string; delta: number; track_stock?: boolean }) => {
+      const { data: prod, error: e1 } = await supabase.from('products').select('stock').eq('id', id).single()
+      if (e1) throw e1
+      const after = ((prod as { stock: number }).stock || 0) + delta
+      const patch: Record<string, unknown> = { stock: after }
+      if (track_stock !== undefined) patch.track_stock = track_stock
+      const { error: e2 } = await supabase.from('products').update(patch).eq('id', id)
+      if (e2) throw e2
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['products'] }),
+  })
+}
+
+// ---------- Paket menu ----------
+export function usePackageItems(packageId?: string) {
+  return useQuery({
+    queryKey: ['package-items', packageId],
+    enabled: !!packageId,
+    queryFn: async (): Promise<PackageItem[]> => {
+      const { data, error } = await supabase.from('package_items').select('*').eq('package_id', packageId!)
+      if (error) throw error
+      return data as PackageItem[]
+    },
+  })
+}
+
+/** Semua komposisi paket sekaligus — untuk hitung HPP paket di daftar menu. */
+export function useAllPackageItems() {
+  return useQuery({
+    queryKey: ['package-items-all'],
+    queryFn: async (): Promise<PackageItem[]> => {
+      const { data, error } = await supabase.from('package_items').select('*')
+      if (error) throw error
+      return data as PackageItem[]
+    },
+  })
+}
+
+export function useSetPackageItems() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ packageId, items }: { packageId: string; items: Array<{ component_id: string; qty: number }> }) => {
+      const del = await supabase.from('package_items').delete().eq('package_id', packageId)
+      if (del.error) throw del.error
+      if (items.length) {
+        const ins = await supabase.from('package_items').insert(items.map((it) => ({ ...it, package_id: packageId })))
+        if (ins.error) throw ins.error
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['package-items'] })
+      qc.invalidateQueries({ queryKey: ['package-items-all'] })
+      qc.invalidateQueries({ queryKey: ['products'] })
+      qc.invalidateQueries({ queryKey: ['product-sales'] })
+    },
+  })
+}
+
+export function usePackageIngredients(packageId?: string) {
+  return useQuery({
+    queryKey: ['package-ingredients', packageId],
+    enabled: !!packageId,
+    queryFn: async (): Promise<PackageIngredient[]> => {
+      const { data, error } = await supabase
+        .from('package_ingredients')
+        .select('*, ingredient:ingredients(*)')
+        .eq('package_id', packageId!)
+      if (error) throw error
+      return (data as any[]).map((d) => ({ ...d, ingredient: d.ingredient as Ingredient })) as PackageIngredient[]
+    },
+  })
+}
+
+export function useAllPackageIngredients() {
+  return useQuery({
+    queryKey: ['package-ingredients-all'],
+    queryFn: async (): Promise<PackageIngredient[]> => {
+      const { data, error } = await supabase.from('package_ingredients').select('*, ingredient:ingredients(*)')
+      if (error) throw error
+      return (data as any[]).map((d) => ({ ...d, ingredient: d.ingredient as Ingredient })) as PackageIngredient[]
+    },
+  })
+}
+
+export function useSetPackageIngredients() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ packageId, items }: { packageId: string; items: Array<{ ingredient_id: string; qty: number; source?: string | null; note?: string | null }> }) => {
+      const del = await supabase.from('package_ingredients').delete().eq('package_id', packageId)
+      if (del.error) throw del.error
+      const clean = items.filter((it) => it.ingredient_id && it.qty > 0)
+      if (clean.length) {
+        const ins = await supabase.from('package_ingredients').insert(
+          clean.map((it) => ({ package_id: packageId, ingredient_id: it.ingredient_id, qty: it.qty, source: it.source ?? null, note: it.note ?? null })),
+        )
+        if (ins.error) throw ins.error
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['package-ingredients'] })
+      qc.invalidateQueries({ queryKey: ['package-ingredients-all'] })
+      qc.invalidateQueries({ queryKey: ['products'] })
     },
   })
 }

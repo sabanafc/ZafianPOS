@@ -68,12 +68,15 @@ export function ProductGrid({ products, categories, activeCat, onCat, onPick }: 
           style={cols >= 3 && cols <= 5 ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` } : undefined}
           aria-label="Daftar menu"
         >
-          {filtered.map((p) => (
+          {filtered.map((p) => {
+            const soldOut = p.track_stock && p.stock <= 0
+            return (
             <li key={p.id}>
               <button
                 onClick={() => onPick(p)}
-                className="group relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-slate-200 text-left shadow-card ring-brand-500 transition-transform active:scale-[0.97] dark:bg-slate-800"
-                aria-label={`Tambah ${p.name}, ${fmtID(p.price)}`}
+                disabled={soldOut}
+                className={`group relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-slate-200 text-left shadow-card ring-brand-500 transition-transform active:scale-[0.97] disabled:cursor-not-allowed dark:bg-slate-800 ${soldOut ? 'opacity-55' : ''}`}
+                aria-label={soldOut ? `${p.name} habis` : `Tambah ${p.name}, ${fmtID(p.price)}${p.track_stock ? `, sisa ${p.stock}` : ''}`}
               >
                 {p.image_url ? (
                   <img
@@ -98,10 +101,18 @@ export function ProductGrid({ products, categories, activeCat, onCat, onPick }: 
                   <p className="truncate text-[15px] font-extrabold leading-tight text-slate-900 dark:text-white">{p.name}</p>
                   <p className="mt-0.5 text-[15px] font-extrabold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(p.price)}</p>
                 </div>
-                {/* Indikator stok resep dihilangkan — tetap ringan */}
+                {/* Sisa stok menu (bila dilacak) */}
+                {p.track_stock && (
+                  <span
+                    className={`absolute right-2 top-2 z-10 rounded-full px-2 py-1 text-[10px] font-extrabold shadow ${p.stock <= 0 ? 'bg-red-600 text-white' : p.stock <= p.min_stock ? 'bg-amber-500 text-white' : 'bg-white/95 text-slate-700'}`}
+                  >
+                    {p.stock <= 0 ? 'Habis' : `Sisa ${p.stock.toLocaleString('id-ID')}`}
+                  </span>
+                )}
               </button>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
     </div>
