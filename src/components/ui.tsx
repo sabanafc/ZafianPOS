@@ -77,6 +77,35 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
   return <div className={`rounded-2xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900 ${className}`}>{children}</div>
 }
 
+/**
+ * Grid daftar kartu (1 → 2 → 3 kolom). Selalu dipakai bersama <GridCard>
+ * supaya kartu dalam satu baris sama tinggi.
+ */
+export function CardGrid({ children, label, className = '' }: { children: ReactNode; label?: string; className?: string }) {
+  return (
+    <ul aria-label={label} className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 ${className}`}>
+      {children}
+    </ul>
+  )
+}
+
+/**
+ * Item di dalam <CardGrid>. Pembungkusnya meregangkan kartu setinggi barisnya,
+ * jadi kartu satu baris tetap sejajar walau isinya beda panjang (mis. satu
+ * kartu punya baris info tambahan).
+ *
+ * - `column` (default): isi menumpuk vertikal — beri `mt-auto` pada baris aksi
+ *   agar menempel ke dasar kartu dan sejajar dengan kartu di sebelahnya.
+ * - `column={false}`: kartu horizontal (mis. thumbnail + isi), mis. menu produk.
+ */
+export function GridCard({ children, column = true, className = '', cardClassName = '' }: { children: ReactNode; column?: boolean; className?: string; cardClassName?: string }) {
+  return (
+    <li className={`flex min-w-0 ${className}`}>
+      <Card className={`w-full ${column ? 'flex flex-col' : ''} ${cardClassName}`}>{children}</Card>
+    </li>
+  )
+}
+
 export function Field({ label, children, hint, required }: { label: string; children: ReactNode; hint?: string; required?: boolean }) {
   return (
     <label className="block">

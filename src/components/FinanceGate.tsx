@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Lock, ShieldCheck, Delete } from 'lucide-react'
 import { useSettings } from '../hooks/useSettings'
-import { pinHash, verifyTotp } from '../lib/security'
+import { pinHash, verifyTotp, FINANCE_UNLOCK_KEY, hasFinanceGuard } from '../lib/security'
 import { Spinner } from './ui'
-import { isConfigured } from '../lib/supabase'
 import { toast } from '../lib/toast'
 
 /** Kunci otomatis halaman keuangan bila tidak ada aktivitas selama 5 menit */
@@ -16,16 +15,17 @@ const FINANCE_IDLE_MS = 5 * 60_000
  */
 export function FinanceGate({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings()
-  const key = 'finance-unlocked'
+  const key = FINANCE_UNLOCK_KEY
 
-  const hasPin = isConfigured && !!settings?.finance_pin
-  const hasTotp = isConfigured && !!settings?.totp_secret
+  const hasPin = !!settings?.finance_pin
+  const hasTotp = !!settings?.totp_secret
+  const guardOn = hasFinanceGuard(settings)
   const [sessionOpen, setSessionOpen] = useState(() => sessionStorage.getItem(key) === '1')
-  const unlocked = !hasPin && !hasTotp ? true : sessionOpen
+  const unlocked = !guardOn ? true : sessionOpen
 
   // Kunci otomatis saat idle: reset timer tiap ada interaksi (sentuhan, klik, keyboard, scroll)
   useEffect(() => {
-    if (!sessionOpen || (!hasPin && !hasTotp)) return
+    if (!sessionOpen || !guardOn) return
     const lock = () => {
       sessionStorage.removeItem(key)
       setSessionOpen(false)
@@ -36,7 +36,7 @@ export function FinanceGate({ children }: { children: React.ReactNode }) {
     const evts: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'wheel', 'touchstart']
     evts.forEach((e) => window.addEventListener(e, reset, { passive: true }))
     return () => { window.clearTimeout(timer); evts.forEach((e) => window.removeEventListener(e, reset)) }
-  }, [sessionOpen, hasPin, hasTotp])
+  }, [sessionOpen, guardOn])
 
   // fase verifikasi: 'pin' dulu (bila ada), lalu 'totp' — tiap fase layak input sendiri
   const [stage, setStage] = useState<'pin' | 'totp'>(hasPin ? 'pin' : 'totp')

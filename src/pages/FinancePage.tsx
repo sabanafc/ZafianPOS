@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Plus, Trash2, Download, TrendingUp, TrendingDown, Pencil, HandCoins, Vault, ArrowDownToLine, ArrowUpFromLine, Banknote, Landmark, Send, Eye, EyeOff, Lock } from 'lucide-react'
 import { useOrders, useFinanceEntries, useSaveFinanceEntry, useDeleteFinanceEntry, useActiveShift, useShiftSummary, useShiftSettlements, useWallet, useWalletMutations, useWalletWithdraw, useBankAccounts, useBankBalances, useBankTxns, useBankTxn, useSaveBankAccount, useDeleteBankAccount, useDepositToBank, useBalanceDeltas, buildBalanceSeries } from '../hooks/useOrders'
 import { Page, Card, Button, IconButton, Input, Select, Field, Spinner } from '../components/ui'
+import { useSettings } from '../hooks/useSettings'
 import { PeriodPicker, type Period } from '../components/PeriodPicker'
 import { Sparkline } from '../components/Sparkline'
 import { Modal } from '../components/Modal'
@@ -10,6 +11,7 @@ import { FINANCE_CATEGORIES, FINANCE_LABELS } from '../lib/constants'
 import { downloadCSV } from '../lib/csv'
 import { isOnlineChannel, type FinanceEntry } from '../types'
 import { toast } from '../lib/toast'
+import { FINANCE_UNLOCK_KEY, hasFinanceGuard } from '../lib/security'
 
 /** Jenis mutasi pada feed realtime: deposit/income/expense/transfer dari wallet, bank-in/out dari bank */
 type FeedKind = 'deposit' | 'income' | 'expense' | 'transfer' | 'bank-in' | 'bank-out'
@@ -58,6 +60,11 @@ export default function FinancePage() {
   const { data: orders = [] } = useOrders({ from: dayStartISO(from), to: dayEndISO(to) })
   const { data: entries = [] } = useFinanceEntries({ from, to })
   const { data: shift } = useActiveShift()
+  // Kunci halaman hanya bermakna bila ada PIN/Autentikator — tanpa kredensial
+  // FinanceGate selalu terbuka, jadi tombol Kunci menjelaskan keadaannya.
+  const { settings, loading: settingsLoading } = useSettings()
+  const hasGuard = hasFinanceGuard(settings)
+  const [lockInfoOpen, setLockInfoOpen] = useState(false)
   const { data: shiftSum } = useShiftSummary(shift?.id)
   const { data: settlements = [] } = useShiftSettlements({ from: dayStartISO(from), to: dayEndISO(to) })
   const { data: wallet } = useWallet()
@@ -167,8 +174,17 @@ export default function FinancePage() {
       title="Keuangan"
       actions={
         <div className="flex items-center gap-2">
-          <IconButton label="Kunci akses keuangan" variant="secondary" title="Kunci kembali halaman keuangan"
-            onClick={() => { sessionStorage.removeItem('finance-unlocked'); toast.info('Halaman keuangan dikunci'); location.hash = '#/pos' }}>
+          <IconButton
+            label={hasGuard ? 'Kunci akses keuangan' : 'Aktifkan kunci halaman keuangan'}
+            variant="secondary"
+            disabled={settingsLoading}
+            title={hasGuard ? 'Kunci kembali halaman keuangan' : 'Belum ada PIN/Autentikator — aktifkan dulu'}
+            onClick={() => {
+              if (!hasGuard) { setLockInfoOpen(true); return }
+              sessionStorage.removeItem(FINANCE_UNLOCK_KEY)
+              toast.info('Halaman keuangan dikunci')
+              location.hash = '#/pos'
+            }}>
             <Lock size={18} aria-hidden />
           </IconButton>
           <IconButton label="Ekspor CSV" variant="secondary" onClick={exportCSV}><Download size={18} aria-hidden /></IconButton>
@@ -436,6 +452,20 @@ export default function FinancePage() {
       )}
       {walletModal === 'deposit' && wallet && <DepositModal balance={wallet.balance} onClose={() => setWalletModal(null)} onDeposit={(accountId, amount, note) => deposit.mutate({ accountId, amount, note }, { onSuccess: () => { toast.success(`Rp ${amount.toLocaleString('id-ID')} tersimpan ke bank`); setWalletModal(null) }, onError: (e: Error) => toast.error(e.message) })} />}
       {walletModal === 'bank' && <BankModal onClose={() => setWalletModal(null)} />}
+
+      {/* Belum ada PIN/Autentikator: jelaskan kenapa tombol Kunci belum berefek */}
+      <Modal
+        open={lockInfoOpen}
+        onClose={() => setLockInfoOpen(false)}
+        title="Kunci belum aktif"
+        size="sm"
+        footer={<Button className="w-full" onClick={() => setLockInfoOpen(false)}>Mengerti</Button>}
+      >
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Halaman keuangan belum dikunci karena belum ada PIN atau kode Google Authenticator.
+          Atur salah satunya di <strong>Pengaturan → Keamanan</strong>, lalu tombol Kunci akan berfungsi.
+        </p>
+      </Modal>
     </Page>
   )
 }

@@ -8,7 +8,7 @@ import {
 import { useSettings } from '../hooks/useSettings'
 import { uploadProductImage } from '../lib/storage'
 import type { Category, Product } from '../types'
-import { Page, Card, Button, IconButton, Input, Select, Field, Badge, EmptyState, Switch, ConfirmDialog, Spinner } from '../components/ui'
+import { Page, Card, CardGrid, GridCard, Button, IconButton, Input, Select, Field, Badge, EmptyState, Switch, ConfirmDialog, Spinner } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { fmtID } from '../lib/utils'
 import { toast } from '../lib/toast'
@@ -98,17 +98,17 @@ function ProductsTab() {
       ) : list.length === 0 ? (
         <EmptyState icon={<UtensilsCrossed size={24} />} title="Belum ada produk" subtitle="Tambahkan produk pertama Anda" action={<Button onClick={() => setEditingId('new')}><Plus size={16} aria-hidden /> Tambah Produk</Button>} />
       ) : (
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <CardGrid>
           {list.map((p) => {
             const hpp = hppMap[p.id] || 0
             const margin = p.price > 0 ? Math.round(((p.price - hpp) / p.price) * 100) : 0
             return (
-              <li key={p.id} className="min-w-0">
-                <Card className={`flex overflow-hidden ${!p.is_active ? 'opacity-60' : ''}`}>
-                  <div className="h-24 w-24 shrink-0 bg-slate-100 dark:bg-slate-800">
-                    {p.image_url ? <img src={p.image_url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-slate-300"><ImageUp size={22} aria-hidden /></div>}
+              <GridCard key={p.id} column={false} cardClassName={`flex overflow-hidden ${!p.is_active ? 'opacity-60' : ''}`}>
+                  {/* gambar stretch penuh setinggi kartu — tidak menyisakan celah di bawah */}
+                  <div className="flex w-24 min-h-[6rem] shrink-0 items-stretch bg-slate-100 dark:bg-slate-800">
+                    {p.image_url ? <img src={p.image_url} alt="" className="w-full object-cover" /> : <div className="flex w-full items-center justify-center text-slate-300"><ImageUp size={22} aria-hidden /></div>}
                   </div>
-                  <div className="min-w-0 flex-1 p-3">
+                  <div className="flex min-w-0 flex-1 flex-col p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold">{p.name}</p>
@@ -120,17 +120,16 @@ function ProductsTab() {
                     <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
                       HPP {fmtID(hpp)} · <span className={margin >= 50 ? 'font-semibold text-green-700 dark:text-green-400' : margin >= 25 ? 'font-semibold text-amber-600' : 'font-semibold text-red-600'}>margin {margin}%</span>
                     </p>
-                    <div className="mt-2 flex gap-1">
+                    <div className="mt-auto flex gap-1 pt-2">
                       <IconButton label={`Edit ${p.name}`} size="sm" variant="secondary" onClick={() => setEditingId(p.id)}><Pencil size={14} aria-hidden /></IconButton>
                       <IconButton label={`Resep ${p.name}`} size="sm" variant="secondary" onClick={() => setRecipeForId(p.id)}><ChefHat size={14} aria-hidden /></IconButton>
                       <IconButton label={`Hapus ${p.name}`} size="sm" variant="ghost" className="text-red-500" onClick={() => setDeleting(p)}><Trash2 size={14} aria-hidden /></IconButton>
                     </div>
                   </div>
-                </Card>
-              </li>
+              </GridCard>
             )
           })}
-        </ul>
+        </CardGrid>
       )}
 
       {editingId !== null && (

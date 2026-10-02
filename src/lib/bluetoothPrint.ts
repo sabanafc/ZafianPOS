@@ -264,13 +264,15 @@ export function wrapText(t: string, w: number): string[] {
  */
 function qrCommands(data: string, moduleSize = 6): number[] {
   const payload = new TextEncoder().encode(data)
-  const len = payload.length + 2 // +2: panjang header fn 180
+  const len = payload.length + 3 // +3: cn, fn, dan m pada perintah penyimpanan data
+  const ms = Math.min(16, Math.max(1, Math.round(moduleSize)))
+  // cn selalu 49 (0x31); fn: model 65, ukuran 67, ECC 69, simpan 80, cetak 81
   return [
     GS, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00, // pilih model QR type 2
-    GS, 0x28, 0x6b, 0x03, 0x00, 0x32, 0x43, moduleSize,  // ukuran modul
-    GS, 0x28, 0x6b, 0x03, 0x00, 0x33, 0x45, 0x31,        // level koreksi error M
-    GS, 0x28, 0x6b, len & 0xff, (len >> 8) & 0xff, 0x34, 0x30, ...payload, // simpan data
-    GS, 0x28, 0x6b, 0x03, 0x00, 0x35, 0x31,              // cetak
+    GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, ms,         // ukuran modul
+    GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, 0x31,       // level koreksi error M
+    GS, 0x28, 0x6b, len & 0xff, (len >> 8) & 0xff, 0x31, 0x50, 0x30, ...payload, // simpan data
+    GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30,       // cetak
   ]
 }
 

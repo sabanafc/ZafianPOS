@@ -1,5 +1,13 @@
 // Keamanan akses halaman Keuangan: PIN (SHA-256) & TOTP (Google Authenticator)
 
+/** Kunci sessionStorage penanda halaman Keuangan sudah dibuka pada sesi ini */
+export const FINANCE_UNLOCK_KEY = 'finance-unlocked'
+
+/** Halaman Keuangan terlindungi bila PIN atau kode autentikator sudah disetel */
+export function hasFinanceGuard(settings?: { finance_pin?: string | null; totp_secret?: string | null } | null): boolean {
+  return !!(settings?.finance_pin || settings?.totp_secret)
+}
+
 /** Hash SHA-256 hex dari gabungan teks */
 export async function sha256Hex(text: string): Promise<string> {
   const data = new TextEncoder().encode(text)
