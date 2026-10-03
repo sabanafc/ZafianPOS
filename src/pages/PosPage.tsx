@@ -13,7 +13,7 @@ import { ReceiptDialog } from '../components/pos/Receipt'
 import { Printer } from 'lucide-react'
 import { ShiftSheet } from '../components/shift/ShiftSheet'
 import { Modal } from '../components/Modal'
-import { Button, IconButton, Badge, EmptyState } from '../components/ui'
+import { Button, IconButton, Badge, EmptyState, ConfirmDialog } from '../components/ui'
 import { fmtID, fmtTime } from '../lib/utils'
 import { calcTotals } from '../lib/posCalc'
 import { CHANNELS } from '../lib/constants'
@@ -44,6 +44,7 @@ export default function PosPage() {
   const [lastOrder, setLastOrder] = useState<Order | null>(null)
   // transaksi riwayat yang sedang dilihat struknya (cetak ulang)
   const [reprintOrder, setReprintOrder] = useState<Order | null>(null)
+  const [voidTarget, setVoidTarget] = useState<Order | null>(null)
 
   const subtotal = lines.reduce((s, l) => s + l.price * l.qty, 0)
   const totals = calcTotals(subtotal, discount, settings)
@@ -113,7 +114,7 @@ export default function PosPage() {
         </div>
         <div>
           <h1 className="text-lg font-bold">Shift belum dibuka</h1>
-          <p className="mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-1 max-w-sm text-sm text-muted">
             Buka shift dengan modal awal (float) untuk mulai menerima pesanan. Semua transaksi tercatat ke shift berjalan.
           </p>
         </div>
@@ -156,7 +157,7 @@ export default function PosPage() {
 
         {/* Panel keranjang — full height dari batas topbar, menyatu dengan garis topbar */}
         <aside
-          className="hidden w-[320px] shrink-0 flex-col border-l border-slate-200 bg-slate-50 p-3 xl:w-[370px] lg:flex dark:border-slate-800 dark:bg-slate-900"
+          className="hidden w-[320px] shrink-0 flex-col border-l border-line bg-surface-2 p-3 xl:w-[370px] lg:flex dark:border-line dark:bg-surface"
           style={{ paddingBottom: 'max(0.75rem, var(--sab, 0px))' }}
           aria-label="Keranjang"
         >
@@ -173,7 +174,7 @@ export default function PosPage() {
 
       {/* Bottom bar keranjang (ponsel & tablet portrait) */}
       {lines.length > 0 && (
-        <div className="sticky bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/95">
+        <div className="sticky bottom-0 z-30 border-t border-line bg-surface/95 p-3 backdrop-blur lg:hidden dark:border-line dark:bg-surface/95">
           <Button size="lg" className="w-full" onClick={() => setCartOpen(true)}>
             <CartIcon size={18} aria-hidden />
             {lines.reduce((s, l) => s + l.qty, 0)} item · {fmtID(totals.total)}
@@ -203,16 +204,23 @@ export default function PosPage() {
       />
       <ReceiptDialog order={lastOrder} settings={settings} onClose={() => setLastOrder(null)} />
 
+      <ConfirmDialog
+        open={!!voidTarget} onClose={() => setVoidTarget(null)}
+        title="Void transaksi?" message={`Transaksi ${voidTarget?.order_no ?? ''} akan ditandai void dan tidak dihitung pada laporan.`}
+        confirmLabel="Void"
+        onConfirm={() => voidTarget && voidOrder.mutate(voidTarget.id, { onSuccess: () => toast.success('Transaksi di-void'), onError: (e: Error) => toast.error(e.message) })}
+      />
+
       {/* Riwayat + void — dibuka dari ikon riwayat di topbar. Ketuk transaksi untuk buka struk & cetak ulang */}
       <Modal open={historyOpen} onClose={() => setHistoryOpen(false)} title="Riwayat Transaksi" size="lg">
         {history.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-500">Belum ada transaksi.</p>
+          <p className="py-8 text-center text-sm text-muted">Belum ada transaksi.</p>
         ) : (
           <ul className="space-y-2" aria-label="Riwayat transaksi">
             {history.map((o) => (
-              <li key={o.id} className="rounded-xl border border-slate-200 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60">
+              <li key={o.id} className="flex items-stretch rounded-xl border border-line transition-colors hover:bg-surface-2 dark:border-line dark:hover:bg-surface-2">
                 <button
-                  className="flex w-full items-center justify-between gap-2 p-3 text-left"
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2 p-3 text-left"
                   onClick={() => { setReprintOrder(o); setHistoryOpen(false) }}
                   aria-label={`Buka struk ${o.order_no}`}
                 >
@@ -222,30 +230,25 @@ export default function PosPage() {
                       {o.status === 'void' && <Badge tone="red">Void</Badge>}
                       {isOnlineChannel(o.channel) && <Badge tone="brand">{CHANNELS.find((c) => c.id === o.channel)?.short}</Badge>}
                       {o.status === 'paid' && (
-                        <Printer size={13} className="shrink-0 text-slate-400" aria-hidden />
+                        <Printer size={13} className="shrink-0 text-muted" aria-hidden />
                       )}                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-muted">
                       {fmtTime(o.created_at)} · {CHANNELS.find((c) => c.id === o.channel)?.label} · {o.items?.length || 0} item
                       {o.payment_method ? ` · ${o.payment_method}` : ''}
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="text-sm font-bold tabular-nums">{fmtID(o.total)}</span>
-                    {o.status === 'paid' && (
-                      <IconButton
-                        label={`Void ${o.order_no}`} size="sm" variant="ghost" className="text-red-500"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (confirm(`Void transaksi ${o.order_no}?`)) {
-                            voidOrder.mutate(o.id, { onSuccess: () => toast.success('Transaksi di-void') })
-                          }
-                        }}
-                      >
-                        <Trash2 size={15} aria-hidden />
-                      </IconButton>
-                    )}
-                  </div>
+                  <span className="shrink-0 text-sm font-bold tabular-nums">{fmtID(o.total)}</span>
                 </button>
+                {o.status === 'paid' && (
+                  <div className="flex shrink-0 items-center pr-2">
+                    <IconButton
+                      label={`Void ${o.order_no}`} size="sm" variant="ghost" className="text-red-500"
+                      onClick={() => setVoidTarget(o)}
+                    >
+                      <Trash2 size={15} aria-hidden />
+                    </IconButton>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

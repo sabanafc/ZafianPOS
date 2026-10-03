@@ -85,7 +85,7 @@ export function PaymentModal({ open, total, isOnlineRecording = false, busy = fa
                 className={`flex h-16 flex-col items-center justify-center gap-1 rounded-2xl border-2 text-sm font-bold transition-colors ${
                   method === id
                     ? 'border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
-                    : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400'
+                    : 'border-line text-muted hover:bg-surface-2 dark:border-line dark:text-muted'
                 }`}
               >
                 <Icon size={22} aria-hidden />
@@ -97,11 +97,11 @@ export function PaymentModal({ open, total, isOnlineRecording = false, busy = fa
 
         {method === 'cash' && !isOnlineRecording ? (
           <>
-            <div className="rounded-2xl bg-slate-100 p-4 text-center dark:bg-slate-800">
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Uang diterima</p>
+            <div className="rounded-2xl bg-surface-2 p-4 text-center dark:bg-surface-2">
+              <p className="text-xs font-medium text-muted">Uang diterima</p>
               <p className="text-3xl font-bold tabular-nums" aria-live="polite">{paid ? fmtID(Number(paid)) : 'Rp 0'}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Total: <strong className="tabular-nums">{fmtID(total)}</strong></p>
-              <p className={`mt-1 text-sm font-semibold ${enough ? 'text-green-700 dark:text-green-400' : 'text-slate-400'}`}>
+              <p className="text-xs text-muted">Total: <strong className="tabular-nums">{fmtID(total)}</strong></p>
+              <p className={`mt-1 text-sm font-semibold ${enough ? 'text-green-700 dark:text-green-400' : 'text-muted'}`}>
                 Kembalian: {fmtID(change)}
               </p>
             </div>
@@ -111,7 +111,7 @@ export function PaymentModal({ open, total, isOnlineRecording = false, busy = fa
                 <button
                   key={v}
                   onClick={() => quickSet(v)}
-                  className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
+                  className="rounded-lg bg-surface-2 px-3 py-2 text-xs font-bold text-ink hover:brightness-95 dark:bg-surface-2"
                 >
                   {v >= 1000 ? `${v / 1000}rb` : v}
                 </button>
@@ -129,7 +129,7 @@ export function PaymentModal({ open, total, isOnlineRecording = false, busy = fa
                 <button
                   key={k}
                   onClick={() => press(k)}
-                  className="flex h-14 items-center justify-center rounded-xl bg-white text-xl font-bold text-slate-800 shadow-card ring-1 ring-slate-200 transition-transform active:scale-95 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700"
+                  className="flex h-14 items-center justify-center rounded-xl bg-surface text-xl font-bold text-ink shadow-card ring-1 ring-line transition-transform active:scale-95 dark:bg-surface-2"
                   aria-label={k === '⌫' ? 'Hapus satu digit' : k === 'C' ? 'Hapus semua' : `Angka ${k}`}
                 >
                   {k === '⌫' ? <Delete size={20} aria-hidden /> : k}
@@ -142,14 +142,14 @@ export function PaymentModal({ open, total, isOnlineRecording = false, busy = fa
             <div className="rounded-2xl bg-brand-50 p-6 text-center dark:bg-brand-900/20">
               {method === 'qris' ? <QrCode size={40} className="mx-auto text-brand-600" aria-hidden /> : <Landmark size={40} className="mx-auto text-brand-600" aria-hidden />}
               <p className="mt-3 text-sm font-semibold">Minta pelanggan scan QRIS / transfer ke rekening bisnis.</p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Total: <strong className="tabular-nums">{fmtID(total)}</strong></p>
+              <p className="mt-1 text-sm text-muted">Total: <strong className="tabular-nums">{fmtID(total)}</strong></p>
             </div>
           )
         )}
 
         {isOnlineRecording && (
-          <div className="rounded-2xl bg-slate-100 p-4 text-center dark:bg-slate-800">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total pesanan</p>
+          <div className="rounded-2xl bg-surface-2 p-4 text-center dark:bg-surface-2">
+            <p className="text-xs font-medium text-muted">Total pesanan</p>
             <p className="text-3xl font-bold tabular-nums">{fmtID(total)}</p>
           </div>
         )}

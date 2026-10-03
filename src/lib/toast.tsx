@@ -34,7 +34,7 @@ export function Toasts() {
       {list.map((t) => (
         <div
           key={t.id}
-          className="pointer-events-auto flex w-full max-w-md items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-pop animate-fade-up dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          className="pointer-events-auto flex w-full max-w-md items-center gap-2.5 rounded-xl border border-line bg-surface px-4 py-3 text-sm font-medium text-ink shadow-pop animate-fade-up"
         >
           {t.kind === 'success' && <CheckCircle2 size={18} className="shrink-0 text-green-600" aria-hidden />}
           {t.kind === 'error' && <AlertTriangle size={18} className="shrink-0 text-red-600" aria-hidden />}

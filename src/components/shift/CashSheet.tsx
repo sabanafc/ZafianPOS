@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react'
 import { Modal } from '../Modal'
-import { Button, Input, Field, Spinner } from '../ui'
+import { Button, Input, Field, Spinner, Segmented } from '../ui'
 import { useActiveShift, useAddCashMovement } from '../../hooks/useOrders'
 import { fmtID } from '../../lib/utils'
 import { toast } from '../../lib/toast'
@@ -28,7 +28,7 @@ export function CashSheet({ open, mode, onClose, onSwitchMode }: {
     <Modal open={open} onClose={onClose} title={mode === 'in' ? 'Cash In' : 'Cash Out'} size="sm">
       {!shift ? (
         <div className="space-y-4">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Cash in/out hanya bisa dicatat saat shift aktif. Buka shift terlebih dulu.</p>
+          <p className="text-sm text-muted">Cash in/out hanya bisa dicatat saat shift aktif. Buka shift terlebih dulu.</p>
           <Button variant="secondary" className="w-full" onClick={() => { onClose(); }}>
             Mengerti
           </Button>
@@ -36,22 +36,13 @@ export function CashSheet({ open, mode, onClose, onSwitchMode }: {
       ) : (
         <div className="space-y-4">
           {/* Switch in/out */}
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800" role="tablist" aria-label="Jenis cash movement">
-            {(['in', 'out'] as const).map((m) => (
-              <button
-                key={m}
-                role="tab"
-                aria-selected={mode === m}
-                onClick={() => onSwitchMode(m)}
-                className={`flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-bold transition-colors ${
-                  mode === m ? 'bg-white text-slate-900 shadow dark:bg-slate-900 dark:text-white' : 'text-slate-500 dark:text-slate-400'
-                }`}
-              >
-                {m === 'in' ? <ArrowDownToLine size={17} aria-hidden /> : <ArrowUpFromLine size={17} aria-hidden />}
-                {m === 'in' ? 'Masuk' : 'Keluar'}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            full value={mode} onChange={onSwitchMode} label="Jenis cash movement"
+            options={([['in', 'Masuk'], ['out', 'Keluar']] as Array<['in' | 'out', string]>).map(([m, lbl]) => ({
+              value: m, label: lbl,
+              icon: m === 'in' ? <ArrowDownToLine size={17} aria-hidden /> : <ArrowUpFromLine size={17} aria-hidden />,
+            }))}
+          />
 
           <Field label="Nominal" required>
             <Input
@@ -66,7 +57,7 @@ export function CashSheet({ open, mode, onClose, onSwitchMode }: {
           </Field>
 
           {amount !== '' && Number(amount) > 0 && (
-            <p className="text-center text-sm font-semibold text-slate-600 dark:text-slate-300" aria-live="polite">
+            <p className="text-center text-sm font-semibold text-muted" aria-live="polite">
               {mode === 'in' ? 'Menambah' : 'Mengurangi'} kas drawer: <span className={mode === 'in' ? 'text-green-700 dark:text-green-400' : 'text-red-600'}>{fmtID(Number(amount))}</span>
             </p>
           )}

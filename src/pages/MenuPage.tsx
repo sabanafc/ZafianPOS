@@ -10,7 +10,7 @@ import {
 import { useSettings } from '../hooks/useSettings'
 import { uploadProductImage } from '../lib/storage'
 import type { Category, Product } from '../types'
-import { Page, Card, CardGrid, GridCard, Button, IconButton, Input, Select, Field, Badge, EmptyState, Switch, ConfirmDialog, Spinner } from '../components/ui'
+import { Page, Card, CardGrid, GridCard, Button, IconButton, Input, Select, Field, Badge, EmptyState, Switch, ConfirmDialog, Spinner, Segmented } from '../components/ui'
 import { Modal } from '../components/Modal'
 import { fmtID } from '../lib/utils'
 import { toast } from '../lib/toast'
@@ -26,17 +26,13 @@ export default function MenuPage() {
 
 function TabSwitch({ tab, setTab }: { tab: 'produk' | 'kategori'; setTab: (t: 'produk' | 'kategori') => void }) {
   return (
-    <div className="flex rounded-xl bg-slate-100 p-1 dark:bg-slate-800" role="tablist" aria-label="Bagian menu">
-      {(['produk', 'kategori'] as const).map((t) => (
-        <button
-          key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
-          className={`flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-sm font-semibold ${tab === t ? 'bg-white text-slate-900 shadow dark:bg-slate-900 dark:text-white' : 'text-slate-500'}`}
-        >
-          {t === 'produk' ? <UtensilsCrossed size={15} aria-hidden /> : <Tags size={15} aria-hidden />}
-          {t === 'produk' ? 'Produk' : 'Kategori'}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      value={tab} onChange={setTab} label="Bagian menu"
+      options={[
+        { value: 'produk' as const, label: 'Produk', icon: <UtensilsCrossed size={15} aria-hidden /> },
+        { value: 'kategori' as const, label: 'Kategori', icon: <Tags size={15} aria-hidden /> },
+      ]}
+    />
   )
 }
 
@@ -91,7 +87,7 @@ function ProductsTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-0 flex-1">
-          <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden />
+          <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari produk…" aria-label="Cari produk" className="pl-9" />
         </div>
         <Button onClick={() => setEditingId('new')}><Plus size={17} aria-hidden /> Produk</Button>
@@ -105,7 +101,7 @@ function ProductsTab() {
               <li key={id} className="flex items-center gap-2.5 text-sm">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" aria-hidden>{i + 1}</span>
                 <span className="min-w-0 flex-1 truncate font-medium">{products.find((p) => p.id === id)?.name || '—'}</span>
-                <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-500 dark:text-slate-400">{qty.toLocaleString('id-ID')}x</span>
+                <span className="shrink-0 text-xs font-semibold tabular-nums text-muted">{qty.toLocaleString('id-ID')}x</span>
               </li>
             ))}
           </ol>
@@ -124,8 +120,8 @@ function ProductsTab() {
             return (
               <GridCard key={p.id} column={false} cardClassName={`flex overflow-hidden ${!p.is_active ? 'opacity-60' : ''}`}>
                   {/* gambar stretch penuh setinggi kartu — tidak menyisakan celah di bawah */}
-                  <div className="flex w-24 min-h-[6rem] shrink-0 items-stretch bg-slate-100 dark:bg-slate-800">
-                    {p.image_url ? <img src={p.image_url} alt="" className="w-full object-cover" /> : <div className="flex w-full items-center justify-center text-slate-300"><ImageUp size={22} aria-hidden /></div>}
+                  <div className="flex w-24 min-h-[6rem] shrink-0 items-stretch bg-surface-2 dark:bg-surface-2">
+                    {p.image_url ? <img src={p.image_url} alt="" className="w-full object-cover" /> : <div className="flex w-full items-center justify-center text-muted"><ImageUp size={22} aria-hidden /></div>}
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col p-3">
                     <div className="flex items-start justify-between gap-2">
@@ -134,27 +130,27 @@ function ProductsTab() {
                           <span className="truncate">{p.name}</span>
                           {p.is_package && <Badge tone="brand">Paket</Badge>}
                         </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                        <p className="text-xs text-muted">
                           {catName(p.category_id)}{p.is_package && ` · ${componentCount[p.id] || 0} menu`}
                         </p>
                       </div>
                       <Switch checked={p.is_active} onChange={(v) => toggle.mutate({ id: p.id, is_active: v })} label={`${p.is_active ? 'Sembunyikan' : 'Tampilkan'} ${p.name} di kasir`} />
                     </div>
                     <p className="mt-1 text-sm font-bold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(p.price)}</p>
-                    <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                    <p className="text-xs tabular-nums text-muted">
                       HPP {fmtID(hpp)} · <span className={margin >= 50 ? 'font-semibold text-green-700 dark:text-green-400' : margin >= 25 ? 'font-semibold text-amber-600' : 'font-semibold text-red-600'}>margin {margin}%</span>
                     </p>
                     {p.track_stock && (
                       <div className="mt-1 flex items-center gap-1.5 text-xs">
-                        <span className={`font-semibold tabular-nums ${p.stock <= 0 ? 'text-red-600 dark:text-red-400' : p.stock <= p.min_stock ? 'text-amber-600' : 'text-slate-500 dark:text-slate-400'}`}>
+                        <span className={`font-semibold tabular-nums ${p.stock <= 0 ? 'text-red-600 dark:text-red-400' : p.stock <= p.min_stock ? 'text-amber-600' : 'text-muted'}`}>
                           Stok {p.stock.toLocaleString('id-ID')}
                         </span>
                         <button type="button" onClick={() => adjustStock.mutate({ id: p.id, delta: 1 })} aria-label={`Tambah stok ${p.name}`}
-                          className="flex h-5 w-5 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                          className="flex h-5 w-5 items-center justify-center rounded-md border border-line text-muted hover:bg-surface-2 dark:border-line dark:hover:bg-surface-2">
                           <Plus size={12} aria-hidden />
                         </button>
                         <button type="button" onClick={() => adjustStock.mutate({ id: p.id, delta: -1 })} aria-label={`Kurangi stok ${p.name}`}
-                          className="flex h-5 w-5 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">
+                          className="flex h-5 w-5 items-center justify-center rounded-md border border-line text-muted hover:bg-surface-2 dark:border-line dark:hover:bg-surface-2">
                           <Minus size={12} aria-hidden />
                         </button>
                       </div>
@@ -200,6 +196,7 @@ function ProductFormModal({ product, onClose, categories }: { product: Partial<P
   const [stock, setStock] = useState(product?.stock ? String(product.stock) : '')
   const [minStock, setMinStock] = useState(product?.min_stock ? String(product.min_stock) : '')
   const [isPkg, setIsPkg] = useState(product?.is_package ?? false)
+  const [dailyTarget, setDailyTarget] = useState(product?.daily_target ? String(product.daily_target) : '')
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(product?.image_url || null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -226,6 +223,7 @@ function ProductFormModal({ product, onClose, categories }: { product: Partial<P
           stock: Number(stock.replace(',', '.')) || 0,
           min_stock: Number(minStock.replace(',', '.')) || 0,
           track_stock: track, is_package: isPkg,
+          daily_target: Number(dailyTarget.replace(',', '.')) || 0,
         },
         { onSuccess: () => { toast.success(isNew ? 'Produk ditambahkan' : 'Produk disimpan'); onClose() }, onError: (e: Error) => toast.error(e.message) },
       )
@@ -245,14 +243,14 @@ function ProductFormModal({ product, onClose, categories }: { product: Partial<P
     >
       <div className="space-y-4">
         <div>
-          <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Foto menu</span>
+          <span className="mb-1.5 block text-sm font-medium text-ink">Foto menu</span>
           <button
             onClick={() => fileRef.current?.click()}
-            className="relative flex h-40 w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 hover:border-brand-400 dark:border-slate-700 dark:bg-slate-800"
+            className="relative flex h-40 w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-line bg-surface-2 hover:border-brand-400 dark:border-line dark:bg-surface-2"
             aria-label="Pilih foto produk"
           >
             {preview ? <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover" /> : (
-              <span className="flex flex-col items-center gap-2 text-slate-400">
+              <span className="flex flex-col items-center gap-2 text-muted">
                 <ImageUp size={26} aria-hidden />
                 <span className="text-sm font-medium">Ketuk untuk pilih foto</span>
               </span>
@@ -279,11 +277,14 @@ function ProductFormModal({ product, onClose, categories }: { product: Partial<P
             </Select>
           </Field>
         </div>
-        <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+        <Field label="Target penjualan harian (porsi)" hint="Untuk menghitung kebutuhan bahan & rekomendasi pembelian walau data penjualan belum ada.">
+          <Input inputMode="decimal" value={dailyTarget} onChange={(e) => setDailyTarget(e.target.value.replace(/[^0-9.,]/g, ''))} placeholder="mis. 30" />
+        </Field>
+        <div className="flex items-center justify-between rounded-xl bg-surface-2 p-3 dark:bg-surface-2">
           <span className="text-sm font-medium">Tampilkan di kasir</span>
           <Switch checked={active} onChange={setActive} label="Tampilkan di kasir" />
         </div>
-        <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+        <div className="flex items-center justify-between rounded-xl bg-surface-2 p-3 dark:bg-surface-2">
           <span className="text-sm font-medium">Lacak stok menu</span>
           <Switch checked={track} onChange={setTrack} label="Lacak stok menu" />
         </div>
@@ -297,7 +298,7 @@ function ProductFormModal({ product, onClose, categories }: { product: Partial<P
             </Field>
           </div>
         )}
-        <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+        <div className="flex items-center justify-between rounded-xl bg-surface-2 p-3 dark:bg-surface-2">
           <span className="text-sm font-medium">Menu ini paket</span>
           <Switch checked={isPkg} onChange={setIsPkg} label="Menu ini paket gabungan" />
         </div>
@@ -348,7 +349,7 @@ function RecipeModal({ product, onClose }: { product: Product; onClose: () => vo
       footer={
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-500 dark:text-slate-400">HPP per porsi</span>
+            <span className="text-muted">HPP per porsi</span>
             <span className="font-bold tabular-nums">
               {fmtID(hpp)}{' '}
               <span className={margin >= 50 ? 'text-green-600' : margin >= 25 ? 'text-amber-600' : 'text-red-600'}>· margin {margin}%</span>
@@ -362,14 +363,14 @@ function RecipeModal({ product, onClose }: { product: Product; onClose: () => vo
       }
     >
       {/* Header kolom — sejajar dengan grid baris */}
-      <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_6rem_3.5rem_2.25rem] items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+      <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_6rem_3.5rem_2.25rem] items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-wide text-muted">
         <span>Bahan</span>
         <span className="text-right">Jumlah</span>
         <span className="text-center">Satuan</span>
         <span aria-hidden />
       </div>
       <div className="space-y-2">
-        {current.length === 0 && <p className="py-4 text-center text-sm text-slate-500">Belum ada bahan. Tambahkan bahan pembentuk HPP.</p>}
+        {current.length === 0 && <p className="py-4 text-center text-sm text-muted">Belum ada bahan. Tambahkan bahan pembentuk HPP.</p>}
         {current.map((r, i) => {
           const ing = ingredients.find((x) => x.id === r.ingredient_id)
           return (
@@ -383,7 +384,7 @@ function RecipeModal({ product, onClose }: { product: Product; onClose: () => vo
               <Input
                 inputMode="decimal" value={r.qty} onChange={(e) => setRow(i, { qty: e.target.value.replace(/[^0-9.,]/g, '') })}
                 placeholder="0" aria-label={`Jumlah ${ing?.name || ''}`} className="w-full text-right" />
-              <span className="truncate text-center text-xs text-slate-500">{ing?.unit || '—'}</span>
+              <span className="truncate text-center text-xs text-muted">{ing?.unit || '—'}</span>
               <IconButton label="Hapus baris" size="sm" variant="ghost" className="mx-auto text-red-500" onClick={() => removeRow(i)}><Trash2 size={14} aria-hidden /></IconButton>
             </div>
           )
@@ -473,7 +474,7 @@ function PackageModal({ product, onClose }: { product: Product; onClose: () => v
       footer={
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-500 dark:text-slate-400">HPP paket per porsi</span>
+            <span className="text-muted">HPP paket per porsi</span>
             <span className="font-bold tabular-nums">
               {fmtID(hpp)}{' '}
               <span className={margin >= 50 ? 'text-green-600' : margin >= 25 ? 'text-amber-600' : 'text-red-600'}>· margin {margin}%</span>
@@ -490,11 +491,11 @@ function PackageModal({ product, onClose }: { product: Product; onClose: () => v
         {/* Isi paket: menu komponen */}
         <section>
           <h3 className="mb-1.5 flex items-center gap-1.5 text-sm font-bold"><Package size={15} aria-hidden /> Menu komponen</h3>
-          <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_5rem_2.25rem] items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_5rem_2.25rem] items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-wide text-muted">
             <span>Menu</span><span className="text-right">Jumlah</span><span aria-hidden />
           </div>
           <div className="space-y-2">
-            {comps.length === 0 && <p className="py-3 text-center text-sm text-slate-500">Belum ada menu. Tambahkan menu penyusun paket.</p>}
+            {comps.length === 0 && <p className="py-3 text-center text-sm text-muted">Belum ada menu. Tambahkan menu penyusun paket.</p>}
             {comps.map((c, i) => (
               <div key={i} className="grid grid-cols-[minmax(0,1fr)_5rem_2.25rem] items-center gap-2">
                 <Select value={c.component_id} onChange={(e) => setComp(i, { component_id: e.target.value })} aria-label={`Menu ${i + 1}`} className="w-full min-w-0">
@@ -513,17 +514,17 @@ function PackageModal({ product, onClose }: { product: Product; onClose: () => v
         <section>
           <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
             <h3 className="flex items-center gap-1.5 text-sm font-bold"><ChefHat size={15} aria-hidden /> Bahan paket (HPP)</h3>
-            <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-              <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} className="h-4 w-4 rounded border-slate-300" />
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} className="h-4 w-4 rounded border-line" />
               Pisah per menu
             </label>
           </div>
           <Button variant="secondary" className="mb-2 w-full" onClick={recalc}><RefreshCw size={15} aria-hidden /> Hitung ulang dari menu</Button>
-          <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_5rem_3rem_2.25rem] items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_5rem_3rem_2.25rem] items-center gap-2 px-0.5 text-[11px] font-bold uppercase tracking-wide text-muted">
             <span>Bahan</span><span className="text-right">Jumlah</span><span className="text-center">Satuan</span><span aria-hidden />
           </div>
           <div className="space-y-2">
-            {showIng.length === 0 && <p className="py-3 text-center text-sm text-slate-500">Belum ada bahan. Hitung ulang dari menu atau tambah manual.</p>}
+            {showIng.length === 0 && <p className="py-3 text-center text-sm text-muted">Belum ada bahan. Hitung ulang dari menu atau tambah manual.</p>}
             {showIng.map((r, i) => {
               const ing = ingredients.find((x) => x.id === r.ingredient_id)
               return (
@@ -533,7 +534,7 @@ function PackageModal({ product, onClose }: { product: Product; onClose: () => v
                     {ingredients.filter((x) => x.is_active || x.id === r.ingredient_id).map((x) => <option key={x.id} value={x.id}>{x.name} ({x.unit})</option>)}
                   </Select>
                   <Input inputMode="decimal" value={r.qty} onChange={(e) => setIngRow(i, { qty: e.target.value.replace(/[^0-9.,]/g, '') })} placeholder="0" aria-label={`Jumlah ${ing?.name || ''}`} className="w-full text-right" />
-                  <span className="truncate text-center text-xs text-slate-500">{ing?.unit || '—'}</span>
+                  <span className="truncate text-center text-xs text-muted">{ing?.unit || '—'}</span>
                   <IconButton label="Hapus baris" size="sm" variant="ghost" className="mx-auto text-red-500" onClick={() => removeIngRow(i)}><Trash2 size={14} aria-hidden /></IconButton>
                 </div>
               )
@@ -647,7 +648,7 @@ function CategoriesTab() {
                   type="button"
                   aria-label={`Geser posisi ${c.name}`}
                   onPointerDown={(e) => onHandlePointerDown(e, c.id)}
-                  className={`flex h-10 w-8 shrink-0 touch-none items-center justify-center rounded-lg text-slate-300 hover:bg-slate-100 hover:text-slate-500 active:cursor-grabbing dark:text-slate-600 dark:hover:bg-slate-800 ${dragId === c.id ? 'text-brand-600' : ''}`}
+                  className={`flex h-10 w-8 shrink-0 touch-none items-center justify-center rounded-lg text-muted hover:bg-surface-2 active:cursor-grabbing dark:hover:bg-surface-2 ${dragId === c.id ? 'text-brand-600' : ''}`}
                 >
                   <GripVertical size={18} aria-hidden />
                 </button>
@@ -656,7 +657,7 @@ function CategoriesTab() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{c.name}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{products.filter((p) => p.category_id === c.id).length} produk · urutan {i + 1}</p>
+                  <p className="text-xs text-muted">{products.filter((p) => p.category_id === c.id).length} produk · urutan {i + 1}</p>
                 </div>
                 {!c.is_active && <Badge tone="slate">Nonaktif</Badge>}
                 <IconButton label={`Edit ${c.name}`} size="sm" variant="secondary" onClick={() => setEditing(c)}><Pencil size={14} aria-hidden /></IconButton>
@@ -694,7 +695,7 @@ function CategoryModal({ cat, onClose, onSave }: { cat: Partial<Category> | null
       <div className="space-y-3">
         <Field label="Nama kategori" required><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="mis. Kopi" /></Field>
         <Field label="Urutan tampil"><Input inputMode="numeric" value={order} onChange={(e) => setOrder(e.target.value.replace(/\D/g, ''))} /></Field>
-        <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
+        <div className="flex items-center justify-between rounded-xl bg-surface-2 p-3 dark:bg-surface-2">
           <span className="text-sm font-medium">Aktif</span>
           <Switch checked={active} onChange={setActive} label="Kategori aktif" />
         </div>

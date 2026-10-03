@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { supabase, isConfigured } from '../lib/supabase'
+import { resolveTheme, themeVars } from '../lib/themes'
 import type { Settings } from '../types'
 
 export function useSettings() {
@@ -28,7 +29,8 @@ export function useUpdateSettings() {
   })
 }
 
-/** Terapkan tema dark & margin print ke <html> berdasarkan settings */
+/** Terapkan tema (mode gelap, preset UI, margin print) ke <html> berdasarkan settings.
+ *  Preset UI diubah menjadi variabel CSS — lihat src/lib/themes.ts. */
 export function useThemeEffect(settings?: Settings) {
   useEffect(() => {
     const root = document.documentElement
@@ -37,5 +39,12 @@ export function useThemeEffect(settings?: Settings) {
     else root.classList.remove('dark')
     // margin print terkalibrasi dari pengaturan
     root.style.setProperty('--print-margin', `${settings.print_margin_mm ?? 3}mm`)
-  }, [settings?.dark_mode, settings?.print_margin_mm])
+    // preset tema UI → variabel CSS di <html>
+    const theme = resolveTheme(settings.ui_theme, settings.ui_accent)
+    root.dataset.theme = theme.id
+    const vars = themeVars(theme, !!settings.dark_mode)
+    for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v)
+    // warna bilah browser mengikuti latar tema
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', `rgb(${vars['--canvas']})`)
+  }, [settings?.dark_mode, settings?.print_margin_mm, settings?.ui_theme, settings?.ui_accent])
 }

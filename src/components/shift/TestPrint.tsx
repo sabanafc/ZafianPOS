@@ -36,10 +36,10 @@ export function TestPrint({ settings }: { settings: Settings }) {
   const fontScale = settings?.print_font_scale || 1
 
   return (
-    <div className="space-y-3 rounded-2xl border border-dashed border-slate-300 p-4 dark:border-slate-700">
+    <div className="space-y-3 rounded-2xl border border-dashed border-line p-4">
       <div>
         <p className="flex items-center gap-1.5 text-sm font-bold"><Printer size={15} aria-hidden /> Tes printer</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400">Cek koneksi & kalibrasi dengan struk mini (hemat kertas)</p>
+        <p className="text-xs text-muted">Cek koneksi & kalibrasi dengan struk mini (hemat kertas)</p>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -54,7 +54,7 @@ export function TestPrint({ settings }: { settings: Settings }) {
       </div>
 
       {!BT_SUPPORT && (
-        <p className="text-[11px] text-slate-400">Web Bluetooth tidak tersedia di browser ini — cetak via dialog print browser.</p>
+        <p className="text-[11px] text-muted">Web Bluetooth tidak tersedia di browser ini — cetak via dialog print browser.</p>
       )}
 
       {/* Area print hanya muncul saat mencetak via browser */}

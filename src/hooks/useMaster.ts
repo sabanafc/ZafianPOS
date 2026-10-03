@@ -96,6 +96,7 @@ export function useSaveProduct() {
         min_stock: p.min_stock ?? 0,
         track_stock: p.track_stock ?? false,
         is_package: p.is_package ?? false,
+        daily_target: p.daily_target ?? 0,
       }
       const { error } = p.id
         ? await supabase.from('products').update(payload).eq('id', p.id)
@@ -290,6 +291,7 @@ export function useSaveIngredient() {
         purchase_qty: i.purchase_qty || 1,
         purchase_price: i.purchase_price || 0,
         low_stock_alert: i.low_stock_alert ?? true,
+        assumed_daily_usage: i.assumed_daily_usage ?? 0,
         is_active: i.is_active ?? true,
       }
       const { error } = i.id

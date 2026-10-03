@@ -111,7 +111,7 @@ export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-white" aria-hidden><LogIn size={20} /></div>
             <div>
               <p className="text-sm font-semibold">Mulai shift baru</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Tentukan modal awal kas drawer</p>
+              <p className="text-xs text-muted">Tentukan modal awal kas drawer</p>
             </div>
           </div>
           <Field label="Modal awal (float)" required>
@@ -124,7 +124,7 @@ export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open
               {[50000, 100000, 350000, 500000].map((v) => (
                 <button
                   key={v} type="button" onClick={() => setFloat(String(v))}
-                  className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                  className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs font-semibold text-ink hover:brightness-95 dark:bg-surface-2"
                 >
                   {v / 1000}rb
                 </button>
@@ -138,29 +138,29 @@ export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open
       ) : (
         <div className="space-y-4">
           {!shift ? (
-            <p className="text-sm text-slate-500">Tidak ada shift aktif.</p>
+            <p className="text-sm text-muted">Tidak ada shift aktif.</p>
           ) : (
             <>
               {/* Dua kolom di layar lebar: ringkasan kiri, hitung kas kanan */}
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ringkasan kas</p>
+              <div className="rounded-2xl border border-line p-4 dark:border-line">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Ringkasan kas</p>
                 <dl className="space-y-2 text-sm">
                   <div className="flex items-center justify-between">
-                    <dt className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400"><Banknote size={15} aria-hidden /> Modal awal</dt>
+                    <dt className="flex items-center gap-1.5 text-muted"><Banknote size={15} aria-hidden /> Modal awal</dt>
                     <dd className="font-semibold tabular-nums">{fmtID(shift.opening_float)}</dd>
                   </div>
                   <div className="flex items-center justify-between">
-                    <dt className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400"><TrendingUp size={15} className="text-green-600" aria-hidden /> Penjualan tunai</dt>
+                    <dt className="flex items-center gap-1.5 text-muted"><TrendingUp size={15} className="text-green-600" aria-hidden /> Penjualan tunai</dt>
                     <dd className="font-semibold tabular-nums">{fmtID(sum?.cashSales || 0)}</dd>
                   </div>
                   <div className="flex items-center justify-between">
-                    <dt className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400"><ArrowDownToLine size={15} className="text-brand-600" aria-hidden /> Cash masuk</dt>
+                    <dt className="flex items-center gap-1.5 text-muted"><ArrowDownToLine size={15} className="text-brand-600" aria-hidden /> Cash masuk</dt>
                     <dd className="font-semibold tabular-nums">{fmtID(sum?.cashIn || 0)}</dd>
                   </div>
                   <div className="flex items-center justify-between">
-                    <dt className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400"><ArrowUpFromLine size={15} className="text-red-600" aria-hidden /> Cash keluar</dt>
+                    <dt className="flex items-center gap-1.5 text-muted"><ArrowUpFromLine size={15} className="text-red-600" aria-hidden /> Cash keluar</dt>
                     <dd className="font-semibold tabular-nums">{fmtID(sum?.cashOut || 0)}</dd>
                   </div>
                   <div className="flex items-center justify-between border-t border-dashed pt-2 text-base">
@@ -168,7 +168,7 @@ export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open
                     <dd className="font-bold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(expected)}</dd>
                   </div>
                 </dl>
-                <p className="mt-2 text-[11px] leading-snug text-slate-400 dark:text-slate-500">
+                <p className="mt-2 text-[11px] leading-snug text-muted dark:text-muted">
                   = Penjualan tunai {fmtID(sum?.cashSales || 0)} + Modal awal {fmtID(shift.opening_float)}
                   {(sum?.cashIn || 0) > 0 || (sum?.cashOut || 0) > 0
                     ? ` + Cash in ${fmtID(sum?.cashIn || 0)} − Cash out ${fmtID(sum?.cashOut || 0)}`
@@ -191,7 +191,7 @@ export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open
               {cash && cash.length > 0 && (
                 <div className="max-h-32 space-y-1.5 overflow-y-auto" aria-label="Riwayat cash in/out">
                   {cash.map((c) => (
-                    <div key={c.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800/60">
+                    <div key={c.id} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-xs dark:bg-surface-2/60">
                       <span className="flex items-center gap-1.5 font-medium">
                         {c.type === 'in' ? <ArrowDownToLine size={13} className="text-brand-600" aria-hidden /> : <ArrowUpFromLine size={13} className="text-red-600" aria-hidden />}
                         {c.type === 'in' ? 'Masuk' : 'Keluar'} {c.note ? `· ${c.note}` : ''}
@@ -205,21 +205,21 @@ export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open
 
                 {/* Kanan: tabel hitung kas per pecahan (tombol +/−) & kas fisik */}
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800">
-                    <p className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-bold dark:border-slate-800">
+                  <div className="rounded-2xl border border-line dark:border-line">
+                    <p className="flex items-center gap-2 border-b border-line px-4 py-3 text-sm font-bold dark:border-line">
                       <Calculator size={16} className="text-brand-600" aria-hidden /> Hitung kas per pecahan
                       {denomTotal > 0 && <span className="ml-auto text-xs font-semibold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(denomTotal)}</span>}
                     </p>
                     <div className="space-y-2 px-4 py-3">
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Ketik jumlah lembar/koin atau pakai tombol +/− — total otomatis mengisi kolom "Kas fisik dihitung".</p>
+                      <p className="text-xs text-muted">Ketik jumlah lembar/koin atau pakai tombol +/− — total otomatis mengisi kolom "Kas fisik dihitung".</p>
                       <div className="space-y-1.5">
                       {visibleDenoms.map((d) => (
                         <div key={d} className="grid grid-cols-[2.75rem_2.25rem_minmax(0,1fr)_2.25rem_4.25rem] items-center gap-1.5">
-                          <span className="text-xs font-semibold text-slate-500" aria-hidden>{d >= 1000 ? `${d / 1000}rb` : d}</span>
+                          <span className="text-xs font-semibold text-muted" aria-hidden>{d >= 1000 ? `${d / 1000}rb` : d}</span>
                           <button
                             type="button" onClick={() => stepDenom(d, -1)}
                             aria-label={`Kurangi pecahan ${d}`}
-                            className="flex h-9 items-center justify-center rounded-lg bg-slate-100 text-lg font-bold leading-none text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                            className="flex h-9 items-center justify-center rounded-lg bg-surface-2 text-lg font-bold leading-none text-muted hover:brightness-95"
                           >−</button>
                           <Input
                             inputMode="numeric" pattern="[0-9]*" value={denoms[d] ?? ''}
@@ -230,16 +230,16 @@ export function ShiftSheet({ open, mode, onClose }: { open: boolean; mode: 'open
                           <button
                             type="button" onClick={() => stepDenom(d, 1)}
                             aria-label={`Tambah pecahan ${d}`}
-                            className="flex h-9 items-center justify-center rounded-lg bg-slate-100 text-lg font-bold leading-none text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                            className="flex h-9 items-center justify-center rounded-lg bg-surface-2 text-lg font-bold leading-none text-muted hover:brightness-95"
                           >+</button>
-                          <span className="truncate text-right text-[11px] tabular-nums text-slate-400" aria-hidden>{fmtID((Number(denoms[d]) || 0) * d)}</span>
+                          <span className="truncate text-right text-[11px] tabular-nums text-muted" aria-hidden>{fmtID((Number(denoms[d]) || 0) * d)}</span>
                         </div>
                       ))}
                       </div>
-                  <label className="flex w-fit cursor-pointer items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                  <label className="flex w-fit cursor-pointer items-center gap-2 text-xs font-medium text-muted">
                     <input
                       type="checkbox" checked={hideCoins} onChange={(e) => toggleHideCoins(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                      className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500"
                     />
                     Sembunyikan koin kecil (500/200/100)
                   </label>

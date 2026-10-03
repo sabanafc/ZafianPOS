@@ -33,7 +33,7 @@ export function TickerBar() {
 
   return (
     <div
-      className="ticker relative flex h-8 shrink-0 items-center overflow-hidden border-t border-slate-200 bg-slate-900 text-xs font-semibold tracking-wide text-white dark:border-slate-800"
+      className="ticker relative flex h-8 shrink-0 items-center overflow-hidden border-t border-line bg-ink text-xs font-semibold tracking-wide text-canvas dark:bg-surface-2 dark:text-ink"
       role="region"
       aria-label="Info berjalan: stok kritis dan promo"
     >

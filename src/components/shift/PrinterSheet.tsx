@@ -65,13 +65,13 @@ export function PrinterSheet({ open, onClose, settings }: { open: boolean; onClo
     <Modal open={open} onClose={onClose} title="Printer Bluetooth" size="sm">
       <div className="space-y-4">
         {/* Status */}
-        <div className={`flex items-center gap-3 rounded-2xl p-4 ${bt.connected ? 'bg-green-50 dark:bg-green-900/20' : 'bg-slate-100 dark:bg-slate-800'}`}>
-          <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${bt.connected ? 'bg-green-600 text-white' : 'bg-slate-400 text-white dark:bg-slate-600'}`} aria-hidden>
+        <div className={`flex items-center gap-3 rounded-2xl p-4 ${bt.connected ? 'bg-green-50 dark:bg-green-900/20' : 'bg-surface-2 dark:bg-surface-2'}`}>
+          <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${bt.connected ? 'bg-green-600 text-white' : 'bg-line text-ink'}`} aria-hidden>
             {bt.connected ? <BluetoothConnected size={20} /> : <BluetoothOff size={20} />}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold">{bt.connected ? bt.name : 'Belum terhubung'}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-muted">
               {bt.connected ? 'Siap mencetak struk via Bluetooth' : 'Hubungkan printer thermal ESC/POS (BLE)'}
             </p>
           </div>
@@ -112,7 +112,7 @@ export function PrinterSheet({ open, onClose, settings }: { open: boolean; onClo
         </div>
 
         {/* Tips */}
-        <div className="flex items-start gap-2.5 rounded-xl bg-slate-50 p-3.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+        <div className="flex items-start gap-2.5 rounded-xl bg-surface-2 p-3.5 text-xs text-muted dark:bg-surface-2">
           <Info size={15} className="mt-0.5 shrink-0" aria-hidden />
           <div>
             <p className="font-semibold">Tips pairing:</p>

@@ -1,20 +1,27 @@
 import { useMemo, useState } from 'react'
-import { Wallet, Receipt, TrendingUp, TrendingDown, AlertTriangle, ArrowRight, ArrowUpRight, ArrowDownRight, Minus, Clock, Tags, CreditCard, Lock } from 'lucide-react'
+import { Wallet, Receipt, TrendingUp, TrendingDown, AlertTriangle, ArrowRight, ArrowUpRight, ArrowDownRight, Minus, Clock, Tags, CreditCard, Lock, Target, SlidersHorizontal, Printer } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useOrders, useFinanceEntries, useShiftHistory } from '../hooks/useOrders'
-import { useIngredients, useCategories, useProducts } from '../hooks/useMaster'
+import { useIngredients, useCategories, useProducts, useAllRecipes, useAllPackageIngredients, useProductSales } from '../hooks/useMaster'
 import { useSettings } from '../hooks/useSettings'
-import { Page, Card, Badge, Spinner } from '../components/ui'
+import { Page, Card, Badge, Spinner, Button } from '../components/ui'
 import { PeriodPicker, type Period } from '../components/PeriodPicker'
 import { fmtID, fmtIDShort, fmtQty, fmtDateTime, dayStartISO, dayEndISO, todayISO, daysAgoISO } from '../lib/utils'
 import { CHANNELS, PAYMENTS } from '../lib/constants'
+import { buildProjection, buildTargetUsage, buildPlan, DEFAULT_WINDOW_DAYS } from '../lib/purchasing'
+import { openDailyReport } from '../lib/dailyReport'
+import { toast } from '../lib/toast'
 import type { Order } from '../types'
+
+const SHOPPING_HORIZON = 7
 
 export default function DashboardPage() {
   const [period, setPeriod] = useState<Period>(7)
   const [selIdx, setSelIdx] = useState<number | null>(null)
   const [customFrom, setCustomFrom] = useState(() => daysAgoISO(6))
   const [customTo, setCustomTo] = useState(() => todayISO())
+  const [simOpen, setSimOpen] = useState(false)
+  const [simTargets, setSimTargets] = useState<Record<string, number>>({})
   const changePeriod = (p: Period) => { setPeriod(p); setSelIdx(null) }
   const applyCustom = (a: string, b: string) => {
     setCustomFrom(a); setCustomTo(b); setPeriod('custom'); setSelIdx(null)
@@ -52,6 +59,64 @@ export default function DashboardPage() {
   const { data: allProducts = [] } = useProducts()
   const { data: finance = [] } = useFinanceEntries({ from: from.slice(0, 10), to: to.slice(0, 10) })
   const { data: shifts = [] } = useShiftHistory()
+  const { data: recipes = [] } = useAllRecipes()
+  const { data: pkgIngredients = [] } = useAllPackageIngredients()
+  const { data: productSales = new Map<string, number>() } = useProductSales(DEFAULT_WINDOW_DAYS)
+
+  // HPP per produk: menu biasa dari resep bahan; paket dari bahan efektif paket
+  const hppMap = useMemo(() => {
+    const m: Record<string, number> = {}
+    const pkgIds = new Set(allProducts.filter((p) => p.is_package).map((p) => p.id))
+    for (const r of recipes as Array<{ product_id: string; qty: number; ingredient?: { cost_per_unit: number } }>) {
+      if (pkgIds.has(r.product_id)) continue
+      m[r.product_id] = (m[r.product_id] || 0) + r.qty * (r.ingredient?.cost_per_unit || 0)
+    }
+    for (const pi of pkgIngredients as Array<{ package_id: string; qty: number; ingredient?: { cost_per_unit: number } }>) {
+      m[pi.package_id] = (m[pi.package_id] || 0) + pi.qty * (pi.ingredient?.cost_per_unit || 0)
+    }
+    return m
+  }, [recipes, pkgIngredients, allProducts])
+
+  // Proyeksi omzet & laba harian dari target menu + banding penjualan nyata
+  const projection = useMemo(
+    () => buildProjection(allProducts, hppMap, productSales, DEFAULT_WINDOW_DAYS),
+    [allProducts, hppMap, productSales],
+  )
+
+  // Daftar belanja bahan dari target saat ini (untuk laporan harian)
+  const baseShopping = useMemo(() => {
+    const usage = buildTargetUsage(allProducts, recipes, pkgIngredients)
+    return buildPlan(ingredients, {}, SHOPPING_HORIZON, usage)
+  }, [allProducts, recipes, pkgIngredients, ingredients])
+  const baseShoppingCost = baseShopping.filter((p) => p.recommended).reduce((s, p) => s + p.estCost, 0)
+
+  // ---- Simulasi what-if: ubah target di memori, tidak disimpan ----
+  const simProducts = useMemo(
+    () => allProducts.map((p) => (simTargets[p.id] !== undefined ? { ...p, daily_target: simTargets[p.id] } : p)),
+    [allProducts, simTargets],
+  )
+  const simProjection = useMemo(
+    () => buildProjection(simProducts, hppMap, productSales, DEFAULT_WINDOW_DAYS),
+    [simProducts, hppMap, productSales],
+  )
+  const simShoppingCost = useMemo(() => {
+    const usage = buildTargetUsage(simProducts, recipes, pkgIngredients)
+    return buildPlan(ingredients, {}, SHOPPING_HORIZON, usage)
+      .filter((p) => p.recommended)
+      .reduce((s, p) => s + p.estCost, 0)
+  }, [simProducts, recipes, pkgIngredients, ingredients])
+  const simTouched = Object.keys(simTargets).length > 0
+
+  const handleDailyReport = () => {
+    const ok = openDailyReport({
+      businessName: settings?.business_name || 'Kasir POS',
+      dateLabel: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+      projection,
+      shopping: baseShopping.filter((p) => p.recommended),
+      horizon: SHOPPING_HORIZON,
+    })
+    if (!ok) toast.error('Popup diblokir — izinkan popup untuk membuka ringkasan harian')
+  }
 
   const paid = useMemo(() => orders.filter((o) => o.status === 'paid'), [orders])
   const prevPaid = useMemo(() => prevOrders.filter((o) => o.status === 'paid'), [prevOrders])
@@ -191,7 +256,10 @@ export default function DashboardPage() {
 
   return (
     <Page title="Dashboard" actions={
-      <PeriodPicker period={period} onPeriod={changePeriod} customFrom={customFrom} customTo={customTo} onCustom={applyCustom} />
+      <div className="flex flex-wrap items-center gap-2">
+        <PeriodPicker period={period} onPeriod={changePeriod} customFrom={customFrom} customTo={customTo} onCustom={applyCustom} />
+        <Button variant="secondary" onClick={handleDailyReport}><Printer size={16} aria-hidden /> Ringkasan</Button>
+      </div>
     }>
       {isLoading ? (
         <div className="flex justify-center py-20"><Spinner /></div>
@@ -205,16 +273,120 @@ export default function DashboardPage() {
             <Stat icon={<TrendingDown size={18} aria-hidden />} label="HPP bahan" value={fmtIDShort(cogs)} sub={`${revenue > 0 ? Math.round((cogs / revenue) * 100) : 0}% dari omzet · diskon ${fmtIDShort(discountGiven)}`} />
           </div>
 
+          {projection.activeMenus > 0 && (
+            <Card className="p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="flex items-center gap-1.5 text-sm font-bold"><Target size={15} aria-hidden /> Proyeksi dari target harian</h2>
+                <Link to="/menu" className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline dark:text-brand-400">Atur target <ArrowRight size={12} aria-hidden /></Link>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <p className="text-xs text-muted">Omzet/hari</p>
+                  <p className="text-lg font-bold tabular-nums">{fmtIDShort(projection.targetRevenue)}</p>
+                  <p className="text-[11px] text-muted">≈ {fmtIDShort(projection.targetRevenue * 30)}/bulan</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted">HPP bahan/hari</p>
+                  <p className="text-lg font-bold tabular-nums">{fmtIDShort(projection.targetCost)}</p>
+                  <p className="text-[11px] text-muted">{projection.targetRevenue > 0 ? Math.round((projection.targetCost / projection.targetRevenue) * 100) : 0}% dari omzet</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted">Laba/hari</p>
+                  <p className={`text-lg font-bold tabular-nums ${projection.targetProfit >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600'}`}>{fmtIDShort(projection.targetProfit)}</p>
+                  <p className="text-[11px] text-muted">≈ {fmtIDShort(projection.targetProfit * 30)}/bulan</p>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-muted">{projection.activeMenus} menu ber-target · laba kotor dari target, belum termasuk beban operasional</p>
+            </Card>
+          )}
+
+          {projection.activeMenus > 0 && (
+            <Card className="p-4">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="flex items-center gap-1.5 text-sm font-bold"><SlidersHorizontal size={15} aria-hidden /> Simulasi target (what-if)</h2>
+                <div className="flex items-center gap-2">
+                  {simTouched && <Button size="sm" variant="ghost" onClick={() => setSimTargets({})}>Reset</Button>}
+                  <Button size="sm" variant="secondary" onClick={() => setSimOpen((v) => !v)}>{simOpen ? 'Tutup' : 'Buka'}</Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted">Geser target untuk melihat dampaknya ke omzet, laba, dan kebutuhan bahan. Perubahan di sini tidak disimpan.</p>
+
+              {simOpen && (
+                <div className="mt-3 space-y-4">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <SimStat label="Omzet/hari" value={simProjection.targetRevenue} delta={simProjection.targetRevenue - projection.targetRevenue} />
+                    <SimStat label="Laba/hari" value={simProjection.targetProfit} delta={simProjection.targetProfit - projection.targetProfit} />
+                    <SimStat label="HPP bahan/hari" value={simProjection.targetCost} delta={simProjection.targetCost - projection.targetCost} good="down" />
+                    <SimStat label={`Belanja bahan ${SHOPPING_HORIZON} hari`} value={simShoppingCost} delta={simShoppingCost - baseShoppingCost} good="down" />
+                  </div>
+
+                  <ul className="space-y-3">
+                    {projection.menus.map((m) => {
+                      const val = simTargets[m.product.id] ?? m.target
+                      const max = Math.max(60, Math.ceil(m.target * 2))
+                      return (
+                        <li key={m.product.id}>
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="min-w-0 truncate font-medium">{m.product.name}</span>
+                            <span className="shrink-0 font-bold tabular-nums">{fmtQty(val)} <span className="text-xs font-medium text-muted">porsi/hari</span></span>
+                          </div>
+                          <input
+                            type="range" min={0} max={max} step={1} value={val}
+                            onChange={(e) => setSimTargets((t) => ({ ...t, [m.product.id]: Number(e.target.value) }))}
+                            aria-label={`Target ${m.product.name}`}
+                            className="mt-1.5 w-full accent-brand-600"
+                          />
+                        </li>
+                      )
+                    })}
+                  </ul>
+
+                  <p className="text-xs text-muted">
+                    Kebutuhan bahan dihitung dari target simulasi (horizon {SHOPPING_HORIZON} hari){simTouched ? '' : ' — geser salah satu slider untuk melihat perubahannya'}.
+                  </p>
+                </div>
+              )}
+            </Card>
+          )}
+
           <div className="grid gap-4 lg:grid-cols-2">
+            {/* Target vs penjualan nyata */}
+            <Card className="p-4">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="flex items-center gap-1.5 text-sm font-bold"><Target size={15} aria-hidden /> Target vs penjualan nyata</h2>
+                <Link to="/menu" className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline dark:text-brand-400">Sesuaikan <ArrowRight size={12} aria-hidden /></Link>
+              </div>
+              <p className="mb-3 text-xs text-muted">Rata-rata {DEFAULT_WINDOW_DAYS} hari terakhir per menu ber-target. Selisih positif = di atas target.</p>
+              {projection.menus.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted">Belum ada menu ber-target. Atur target dari halaman Menu.</p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {projection.menus.map((m) => {
+                    const ratio = m.target > 0 ? m.actualDaily / m.target : 0
+                    const tone: 'green' | 'amber' | 'red' = ratio >= 1 ? 'green' : ratio >= 0.7 ? 'amber' : 'red'
+                    return (
+                      <li key={m.product.id} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="min-w-0 truncate font-medium">{m.product.name}</span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <span className="text-xs text-muted tabular-nums">target {fmtQty(m.target)} · nyata {fmtQty(Math.round(m.actualDaily * 10) / 10)}/hari</span>
+                          <Badge tone={tone}>{m.diff >= 0 ? '+' : ''}{fmtQty(Math.round(m.diff * 10) / 10)}</Badge>
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </Card>
+
             {/* Grafik */}
             <Card className="p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-sm font-bold">
-                  Penjualan {label.toLowerCase()} <span className="font-medium text-slate-400 dark:text-slate-500">· per {unit}</span>
+                  Penjualan {label.toLowerCase()} <span className="font-medium text-muted dark:text-muted">· per {unit}</span>
                 </h2>
-                <div className="flex items-center gap-3 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                <div className="flex items-center gap-3 text-[10px] font-semibold text-muted">
                   <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-brand-500" aria-hidden /> {label}</span>
-                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-slate-300 dark:bg-slate-600" aria-hidden /> {prevLabel}</span>
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-line" aria-hidden /> {prevLabel}</span>
                 </div>
               </div>
 
@@ -226,15 +398,15 @@ export default function DashboardPage() {
                   ? `${k}:00–${(Number(k) + 1) % 24}:00`
                   : `${unit === 'minggu' ? 'Minggu' : 'Tanggal'} ${k.slice(8)}/${k.slice(5, 7)}`
                 return (
-                  <div className="mb-2.5 rounded-xl bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800" role="status" aria-live="polite">
+                  <div className="mb-2.5 rounded-xl bg-surface-2 px-3 py-2 text-xs dark:bg-surface-2" role="status" aria-live="polite">
                     <p className="font-bold">{title}</p>
-                    <p className="mt-0.5 flex flex-wrap gap-x-3 text-slate-600 dark:text-slate-300">
+                    <p className="mt-0.5 flex flex-wrap gap-x-3 text-muted">
                       <span>Omzet <strong className="tabular-nums">{fmtID(c.value)}</strong></span>
                       <span>{c.trx} transaksi</span>
                       <span>{c.items} item</span>
                     </p>
                     {p.value > 0 && (
-                      <p className="mt-0.5 text-slate-500 dark:text-slate-400">
+                      <p className="mt-0.5 text-muted">
                         {prevLabel} — omzet <strong className="tabular-nums">{fmtID(p.value)}</strong> · {p.trx} transaksi
                       </p>
                     )}
@@ -252,20 +424,20 @@ export default function DashboardPage() {
                       type="button"
                       onClick={() => setSelIdx(sel ? null : i)}
                       aria-label={`${unit === 'jam' ? `Jam ${k}` : `Tanggal ${k.slice(8)}/${k.slice(5, 7)}`}: omzet ${fmtID(c.value)}, ${c.trx} transaksi, ${c.items} item`}
-                      className={`group flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-0.5 pt-1 ${sel ? 'bg-brand-50 dark:bg-slate-800' : ''}`}
+                      className={`group flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-0.5 pt-1 ${sel ? 'bg-brand-50 dark:bg-surface-2' : ''}`}
                     >
-                      <span className="h-3 text-[9px] font-semibold tabular-nums text-slate-400 opacity-0 group-hover:opacity-100">{c.value > 0 ? fmtIDShort(c.value).replace('Rp ', '') : ''}</span>
+                      <span className="h-3 text-[9px] font-semibold tabular-nums text-muted opacity-0 group-hover:opacity-100">{c.value > 0 ? fmtIDShort(c.value).replace('Rp ', '') : ''}</span>
                       <div className="flex min-h-0 w-full flex-1 items-end justify-center gap-[2px]">
                         <div
                           className={`w-full max-w-[13px] rounded-t-md transition-colors ${sel ? 'bg-brand-700 dark:bg-brand-400' : 'bg-brand-500 group-hover:bg-brand-600 dark:bg-brand-600'}`}
                           style={{ height: `${Math.max(3, (c.value / maxVal) * 100)}%` }}
                         />
                         <div
-                          className="w-full max-w-[13px] rounded-t-md bg-slate-300 group-hover:bg-slate-400 dark:bg-slate-600"
+                          className="w-full max-w-[13px] rounded-t-md bg-line group-hover:brightness-95"
                           style={{ height: `${Math.max(3, (p.value / maxVal) * 100)}%` }}
                         />
                       </div>
-                      <span className="text-[9px] text-slate-400">{unit === 'jam' ? k : `${k.slice(8)}/${k.slice(5, 7)}`}</span>
+                      <span className="text-[9px] text-muted">{unit === 'jam' ? k : `${k.slice(8)}/${k.slice(5, 7)}`}</span>
                     </button>
                   )
                 })}
@@ -276,7 +448,7 @@ export default function DashboardPage() {
             <Card className="p-4">
               <h2 className="mb-3 text-sm font-bold">Omzet per channel</h2>
               {byChannel.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-500">Belum ada transaksi pada periode ini.</p>
+                <p className="py-6 text-center text-sm text-muted">Belum ada transaksi pada periode ini.</p>
               ) : (
                 <ul className="space-y-2.5">
                   {byChannel.map(([ch, v]) => {
@@ -289,9 +461,9 @@ export default function DashboardPage() {
                             {meta && <meta.icon size={15} style={{ color: meta.color }} aria-hidden />}
                             {meta?.label || ch}
                           </span>
-                          <span className="tabular-nums">{fmtID(v.total)} <span className="text-xs text-slate-400">· {v.count} trx · {share}%</span></span>
+                          <span className="tabular-nums">{fmtID(v.total)} <span className="text-xs text-muted">· {v.count} trx · {share}%</span></span>
                         </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                        <div className="h-1.5 overflow-hidden rounded-full bg-surface-2 dark:bg-surface-2">
                           <div className="h-full rounded-full" style={{ width: `${share}%`, background: meta?.color || '#6366f1' }} />
                         </div>
                       </li>
@@ -305,14 +477,14 @@ export default function DashboardPage() {
             <Card className="p-4">
               <h2 className="mb-3 text-sm font-bold">Produk terlaris</h2>
               {topProducts.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-500">Belum ada penjualan.</p>
+                <p className="py-6 text-center text-sm text-muted">Belum ada penjualan.</p>
               ) : (
                 <ol className="space-y-2">
                   {topProducts.map((p, i) => (
                     <li key={p.name} className="flex items-center gap-3 text-sm">
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300" aria-hidden>{i + 1}</span>
                       <span className="min-w-0 flex-1 truncate font-medium">{p.name}</span>
-                      <span className="shrink-0 text-xs text-slate-500">{p.qty}x · {fmtIDShort(p.total)}</span>
+                      <span className="shrink-0 text-xs text-muted">{p.qty}x · {fmtIDShort(p.total)}</span>
                     </li>
                   ))}
                 </ol>
@@ -330,9 +502,9 @@ export default function DashboardPage() {
                     <li key={p.id}>
                       <div className="mb-1 flex items-center justify-between text-sm">
                         <span className="flex items-center gap-1.5 font-semibold"><p.icon size={15} style={{ color: p.color }} aria-hidden /> {p.label}</span>
-                        <span className="tabular-nums">{fmtID(val)} <span className="text-xs text-slate-400">{share}%</span></span>
+                        <span className="tabular-nums">{fmtID(val)} <span className="text-xs text-muted">{share}%</span></span>
                       </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-surface-2 dark:bg-surface-2">
                         <div className="h-full rounded-full" style={{ width: `${share}%`, background: p.color }} />
                       </div>
                     </li>
@@ -345,7 +517,7 @@ export default function DashboardPage() {
             <Card className="p-4">
               <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold"><Tags size={15} aria-hidden /> Omzet per kategori</h2>
               {byCategory.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-500">Belum ada penjualan.</p>
+                <p className="py-6 text-center text-sm text-muted">Belum ada penjualan.</p>
               ) : (
                 <ul className="space-y-2">
                   {byCategory.map(([cat, val]) => (
@@ -362,13 +534,13 @@ export default function DashboardPage() {
             <Card className="p-4">
               <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold"><Clock size={15} aria-hidden /> Jam tersibuk</h2>
               {byHour.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-500">Belum ada data jam.</p>
+                <p className="py-6 text-center text-sm text-muted">Belum ada data jam.</p>
               ) : (
                 <ul className="space-y-2">
                   {byHour.map(([h, v]) => (
                     <li key={h} className="flex items-center justify-between text-sm">
                       <span className="font-medium">{String(h).padStart(2, '0')}:00–{String((h + 1) % 24).padStart(2, '0')}:00</span>
-                      <span className="text-xs text-slate-500">{v.count} trx · {fmtIDShort(v.total)}</span>
+                      <span className="text-xs text-muted">{v.count} trx · {fmtIDShort(v.total)}</span>
                     </li>
                   ))}
                 </ul>
@@ -382,7 +554,7 @@ export default function DashboardPage() {
                 <Link to="/bahan" className="flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline dark:text-brand-400">Kelola <ArrowRight size={12} aria-hidden /></Link>
               </div>
               {lowStock.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-500">Semua stok aman. 👍</p>
+                <p className="py-6 text-center text-sm text-muted">Semua stok aman. 👍</p>
               ) : (
                 <ul className="space-y-2">
                   {lowStock.map((i) => (
@@ -400,24 +572,36 @@ export default function DashboardPage() {
               <h2 className="mb-3 flex items-center gap-1.5 text-sm font-bold"><Lock size={15} aria-hidden /> Shift terakhir ditutup</h2>
               {lastClosedShift ? (
                 <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between"><span className="text-slate-500">Ditutup</span><span className="font-semibold">{fmtDateTime(lastClosedShift.closed_at!)}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Kas diharapkan</span><span className="font-bold tabular-nums">{fmtID(lastClosedShift.expected_cash || 0)}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-500">Kas dihitung</span><span className="font-bold tabular-nums">{fmtID(lastClosedShift.counted_cash || 0)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted">Ditutup</span><span className="font-semibold">{fmtDateTime(lastClosedShift.closed_at!)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted">Kas diharapkan</span><span className="font-bold tabular-nums">{fmtID(lastClosedShift.expected_cash || 0)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted">Kas dihitung</span><span className="font-bold tabular-nums">{fmtID(lastClosedShift.counted_cash || 0)}</span></div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Selisih</span>
+                    <span className="text-muted">Selisih</span>
                     <Badge tone={Math.abs(lastClosedShift.cash_diff || 0) < 1 ? 'green' : (lastClosedShift.cash_diff || 0) > 0 ? 'amber' : 'red'}>
                       {(lastClosedShift.cash_diff || 0) > 0 ? '+' : ''}{fmtID(lastClosedShift.cash_diff || 0)}
                     </Badge>
                   </div>
                 </div>
               ) : (
-                <p className="py-6 text-center text-sm text-slate-500">Belum ada shift yang ditutup.</p>
+                <p className="py-6 text-center text-sm text-muted">Belum ada shift yang ditutup.</p>
               )}
             </Card>
           </div>
         </div>
       )}
     </Page>
+  )
+}
+
+function SimStat({ label, value, delta, good = 'up' }: { label: string; value: number; delta: number; good?: 'up' | 'down' }) {
+  const improved = good === 'up' ? delta > 0 : delta < 0
+  const cls = delta === 0 ? 'text-muted' : improved ? 'text-green-700 dark:text-green-400' : 'text-red-600'
+  return (
+    <div className="rounded-xl bg-surface-2 p-3 dark:bg-surface-2">
+      <p className="text-xs text-muted">{label}</p>
+      <p className="text-base font-bold tabular-nums">{fmtIDShort(value)}</p>
+      <p className={`text-xs font-semibold tabular-nums ${cls}`}>{delta === 0 ? '—' : `${delta > 0 ? '+' : ''}${fmtIDShort(delta)}`}</p>
+    </div>
   )
 }
 
@@ -430,7 +614,7 @@ function Stat({ icon, label, value, delta, sub, tone }: { icon: React.ReactNode;
   const Delta = () => {
     if (delta === undefined) return null
     const up = delta > 0, flat = delta === 0
-    const cls = flat ? 'text-slate-500' : up ? 'text-green-700 dark:text-green-400' : 'text-red-600'
+    const cls = flat ? 'text-muted' : up ? 'text-green-700 dark:text-green-400' : 'text-red-600'
     const Icon = flat ? Minus : up ? ArrowUpRight : ArrowDownRight
     return (
       <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${cls}`} aria-label={`${up ? 'Naik' : flat ? 'Tetap' : 'Turun'} ${Math.abs(delta)}% dibanding periode sebelumnya`}>
@@ -444,9 +628,9 @@ function Stat({ icon, label, value, delta, sub, tone }: { icon: React.ReactNode;
         <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${tones[tone || 'brand']}`} aria-hidden>{icon}</div>
         <Delta />
       </div>
-      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="text-xs font-medium text-muted">{label}</p>
       <p className="mt-0.5 text-xl font-bold tabular-nums md:text-2xl">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{sub}</p>}
+      {sub && <p className="mt-0.5 text-xs text-muted dark:text-muted">{sub}</p>}
     </Card>
   )
 }

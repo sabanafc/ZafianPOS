@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Plus, Trash2, Download, TrendingUp, TrendingDown, Pencil, HandCoins, Vault, ArrowDownToLine, ArrowUpFromLine, Banknote, Landmark, Send, Eye, EyeOff, Lock } from 'lucide-react'
 import { useOrders, useFinanceEntries, useSaveFinanceEntry, useDeleteFinanceEntry, useActiveShift, useShiftSummary, useShiftSettlements, useWallet, useWalletMutations, useWalletWithdraw, useBankAccounts, useBankBalances, useBankTxns, useBankTxn, useSaveBankAccount, useDeleteBankAccount, useDepositToBank, useBalanceDeltas, buildBalanceSeries } from '../hooks/useOrders'
-import { Page, Card, Button, IconButton, Input, Select, Field, Spinner } from '../components/ui'
+import { Page, Card, Button, IconButton, Input, Select, Field, Spinner, ConfirmDialog, Segmented } from '../components/ui'
 import { useSettings } from '../hooks/useSettings'
 import { PeriodPicker, type Period } from '../components/PeriodPicker'
 import { Sparkline } from '../components/Sparkline'
@@ -81,6 +81,7 @@ export default function FinancePage() {
   const saveEntry = useSaveFinanceEntry()
   const delEntry = useDeleteFinanceEntry()
   const [entryModal, setEntryModal] = useState<Partial<FinanceEntry> | null>(null)
+  const [delEntryTarget, setDelEntryTarget] = useState<FinanceEntry | null>(null)
 
   // Feed mutasi realtime: gabungan mutasi wallet + transaksi bank (polling 10 detik di masing-masing hook)
   const [feedFilter, setFeedFilter] = useState<'all' | 'wallet' | 'bank'>('all')
@@ -294,7 +295,7 @@ export default function FinancePage() {
         )}
 
         {/* Label periode aktif */}
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-muted">
           {period === 'custom' ? `Periode ${fmtDate(from)} – ${fmtDate(to)}` : <>Periode {label} · {fmtDate(from)} – {fmtDate(to)}</>}
         </p>
 
@@ -307,7 +308,7 @@ export default function FinancePage() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold">Kas di drawer shift aktif: {fmtID(drawerCash)}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
+                <p className="text-xs text-muted dark:text-muted">
                   Uang yang ditarik & diserahkan ke owner = kas drawer − modal awal ({fmtID(shift!.opening_float)})
                 </p>
               </div>
@@ -327,7 +328,7 @@ export default function FinancePage() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="flex items-center gap-1.5 text-sm font-bold"><HandCoins size={15} className="text-amber-500" aria-hidden /> Setoran per shift</h2>
               {settlements.length > 0 && (
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-muted">
                   Total disetor <strong className="tabular-nums">{fmtID(totalDeposits)}</strong>
                   {totalDiff !== 0 && (
                     <span className={totalDiff > 0 ? ' text-green-700 dark:text-green-400' : ' text-red-600'}> · selisih {totalDiff > 0 ? '+' : ''}{fmtID(totalDiff)}</span>
@@ -336,12 +337,12 @@ export default function FinancePage() {
               )}
             </div>
             {settlements.length === 0 ? (
-              <p className="py-10 text-center text-sm text-slate-500">Belum ada shift yang ditutup pada periode ini.</p>
+              <p className="py-10 text-center text-sm text-muted">Belum ada shift yang ditutup pada periode ini.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="text-[11px] uppercase tracking-wide text-slate-400">
+                    <tr className="text-[11px] uppercase tracking-wide text-muted">
                       <th className="pb-1.5 font-semibold">Ditutup</th>
                       <th className="pb-1.5 text-right font-semibold">Omzet tunai</th>
                       <th className="pb-1.5 text-right font-semibold">Disetor</th>
@@ -352,11 +353,11 @@ export default function FinancePage() {
                     {settlements.map(({ shift: s, cashSales, deposit }) => {
                       const diff = (s.counted_cash || 0) - (s.expected_cash || 0)
                       return (
-                        <tr key={s.id} className="border-t border-slate-100 dark:border-slate-800">
+                        <tr key={s.id} className="border-t border-line">
                           <td className="py-1.5">{fmtDateTime(s.closed_at!)}</td>
                           <td className="py-1.5 text-right tabular-nums">{fmtID(cashSales)}</td>
                           <td className="py-1.5 text-right font-semibold tabular-nums text-amber-700 dark:text-amber-300">{fmtID(deposit)}</td>
-                          <td className={`py-1.5 text-right font-semibold tabular-nums ${diff === 0 ? 'text-slate-400' : diff > 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600'}`}>
+                          <td className={`py-1.5 text-right font-semibold tabular-nums ${diff === 0 ? 'text-muted' : diff > 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600'}`}>
                             {diff === 0 ? '—' : `${diff > 0 ? '+' : ''}${fmtID(diff)}`}
                           </td>
                         </tr>
@@ -381,36 +382,28 @@ export default function FinancePage() {
                   Live
                 </span>
               </h2>
-              <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800" role="radiogroup" aria-label="Filter mutasi">
-                {([
-                  ['all', 'Semua'],
-                  ['wallet', 'Wallet'],
-                  ['bank', 'Bank'],
-                ] as Array<['all' | 'wallet' | 'bank', string]>).map(([v, lbl]) => (
-                  <button key={v} role="radio" aria-checked={feedFilter === v} onClick={() => setFeedFilter(v)}
-                    className={`h-7 rounded-md px-2.5 text-xs font-bold ${feedFilter === v ? 'bg-white text-slate-900 shadow dark:bg-slate-900 dark:text-white' : 'text-slate-500'}`}>
-                    {lbl}
-                  </button>
-                ))}
-              </div>
+              <Segmented
+                kind="radio" size="sm" value={feedFilter} onChange={setFeedFilter} label="Filter mutasi"
+                options={([['all', 'Semua'], ['wallet', 'Wallet'], ['bank', 'Bank']] as Array<['all' | 'wallet' | 'bank', string]>).map(([v, lbl]) => ({ value: v, label: lbl }))}
+              />
             </div>
 
             {feedLoading ? (
               <div className="flex justify-center py-12"><Spinner /></div>
             ) : feedShown.length === 0 ? (
-              <p className="py-12 text-center text-sm text-slate-500">Belum ada mutasi.</p>
+              <p className="py-12 text-center text-sm text-muted">Belum ada mutasi.</p>
             ) : (
-              <ul className="-mx-4 max-h-[520px] divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800" aria-label="Daftar mutasi terkini">
+              <ul className="-mx-4 max-h-[520px] divide-y divide-line overflow-y-auto dark:divide-line" aria-label="Daftar mutasi terkini">
                 {feedShown.map((item) => {
                   const { Icon, bg, sign } = FEED_STYLE[item.kind]
                   const accLabel = item.account === 'bank' ? item.accountName || 'Bank' : 'Wallet'
                   const entry = item.entryId ? entries.find((e) => e.id === item.entryId) : undefined
                   return (
-                    <li key={item.id} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <li key={item.id} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-2">
                       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${bg}`} aria-hidden><Icon size={16} /></span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold">{item.title}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{accLabel} · {item.date.includes('T') ? fmtDateTime(item.date) : fmtDate(item.date)}</p>
+                        <p className="text-xs text-muted">{accLabel} · {item.date.includes('T') ? fmtDateTime(item.date) : fmtDate(item.date)}</p>
                       </div>
                       <span className={`shrink-0 text-sm font-bold tabular-nums ${sign === '+' ? 'text-green-700 dark:text-green-400' : 'text-red-600'}`}>
                         {sign}{fmtID(item.amount)}
@@ -420,7 +413,7 @@ export default function FinancePage() {
                           <IconButton label="Ubah catatan" size="sm" variant="ghost" onClick={() => setEntryModal(entry)}><Pencil size={13} aria-hidden /></IconButton>
                           <IconButton
                             label="Hapus catatan" size="sm" variant="ghost" className="text-red-500"
-                            onClick={() => { if (confirm('Hapus catatan ini?')) delEntry.mutate(entry.id, { onSuccess: () => toast.success('Catatan dihapus') }) }}
+                            onClick={() => setDelEntryTarget(entry)}
                           >
                             <Trash2 size={13} aria-hidden />
                           </IconButton>
@@ -438,6 +431,12 @@ export default function FinancePage() {
       <EntryModal
         entry={entryModal} onClose={() => setEntryModal(null)}
         onSave={(e) => saveEntry.mutate(e as any, { onSuccess: () => { toast.success('Catatan disimpan'); setEntryModal(null) }, onError: (er: Error) => toast.error(er.message) })}
+      />
+
+      <ConfirmDialog
+        open={!!delEntryTarget} onClose={() => setDelEntryTarget(null)}
+        title="Hapus catatan?" message="Catatan keuangan ini akan dihapus permanen dari pembukuan."
+        onConfirm={() => delEntryTarget && delEntry.mutate(delEntryTarget.id, { onSuccess: () => toast.success('Catatan dihapus'), onError: (e: Error) => toast.error(e.message) })}
       />
 
       {walletModal === 'withdraw' && wallet && (
@@ -461,7 +460,7 @@ export default function FinancePage() {
         size="sm"
         footer={<Button className="w-full" onClick={() => setLockInfoOpen(false)}>Mengerti</Button>}
       >
-        <p className="text-sm text-slate-600 dark:text-slate-300">
+        <p className="text-sm text-muted">
           Halaman keuangan belum dikunci karena belum ada PIN atau kode Google Authenticator.
           Atur salah satunya di <strong>Pengaturan → Keamanan</strong>, lalu tombol Kunci akan berfungsi.
         </p>
@@ -507,7 +506,7 @@ function DepositModal({ balance, onClose, onDeposit }: { balance: number; onClos
         <div className="flex flex-wrap gap-1.5">
           {[100000, 250000, 500000, balance].map((v, i) => (
             <button key={i} type="button" onClick={() => setAmount(String(Math.min(v, balance)))}
-              className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300">
+              className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs font-semibold text-ink hover:brightness-95 dark:bg-surface-2">
               {i === 3 ? 'Semua' : `${v / 1000}rb`}
             </button>
           ))}
@@ -529,23 +528,24 @@ function BankModal({ onClose }: { onClose: () => void }) {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState({ name: '', bank_name: '', account_no: '', opening_balance: '' })
   const [txnForm, setTxnForm] = useState<{ accountId: string; type: 'in' | 'out'; amount: string; note: string } | null>(null)
+  const [delAccTarget, setDelAccTarget] = useState<{ id: string; name: string } | null>(null)
 
   return (
     <Modal open onClose={onClose} title="Rekening Bank" size="md">
       <div className="space-y-4">
         <div className="space-y-2">
-          {(bankData?.accounts || []).length === 0 && <p className="py-4 text-center text-sm text-slate-500">Belum ada rekening bank.</p>}
+          {(bankData?.accounts || []).length === 0 && <p className="py-4 text-center text-sm text-muted">Belum ada rekening bank.</p>}
           {(bankData?.accounts || []).map((a) => (
-            <div key={a.id} className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
+            <div key={a.id} className="rounded-2xl border border-line p-3">
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" aria-hidden><Landmark size={16} /></span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold">{a.name}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{a.bank_name || ''}{a.account_no ? ` · ${a.account_no}` : ''}</p>
+                  <p className="text-xs text-muted">{a.bank_name || ''}{a.account_no ? ` · ${a.account_no}` : ''}</p>
                 </div>
                 <span className="text-base font-bold tabular-nums">{fmtID(bankData?.balances.get(a.id) || 0)}</span>
                 <IconButton label={`Hapus ${a.name}`} size="sm" variant="ghost" className="text-red-500"
-                  onClick={() => { if (confirm(`Hapus rekening ${a.name}? Mutasinya ikut terhapus.`)) delAcc.mutate(a.id) }}>
+                  onClick={() => setDelAccTarget({ id: a.id, name: a.name })}>
                   <Trash2 size={14} aria-hidden />
                 </IconButton>
               </div>
@@ -554,7 +554,7 @@ function BankModal({ onClose }: { onClose: () => void }) {
                 <Button size="sm" variant="secondary" onClick={() => setTxnForm({ accountId: a.id, type: 'out', amount: '', note: '' })}><ArrowUpFromLine size={14} aria-hidden /> Dana keluar</Button>
               </div>
               {txnForm && txnForm.accountId === a.id && (
-                <div className="mt-2 space-y-2 rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/60">
+                <div className="mt-2 space-y-2 rounded-xl bg-surface-2 p-2.5">
                   <Input inputMode="numeric" value={txnForm.amount} onChange={(e) => setTxnForm({ ...txnForm, amount: e.target.value.replace(/\D/g, '') })} placeholder="Nominal (Rp)" aria-label="Nominal mutasi" />
                   <div className="flex gap-1.5">
                     <Input value={txnForm.note} onChange={(e) => setTxnForm({ ...txnForm, note: e.target.value })} placeholder="Catatan (opsional)" className="flex-1" />
@@ -568,6 +568,12 @@ function BankModal({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
+
+        <ConfirmDialog
+          open={!!delAccTarget} onClose={() => setDelAccTarget(null)}
+          title="Hapus rekening?" message={`Rekening "${delAccTarget?.name ?? ''}" beserta seluruh mutasinya akan dihapus.`}
+          onConfirm={() => delAccTarget && delAcc.mutate(delAccTarget.id, { onError: (e: Error) => toast.error(e.message) })}
+        />
 
         {adding ? (
           <div className="space-y-2 rounded-2xl border border-brand-200 bg-brand-50/50 p-3 dark:border-brand-900/50 dark:bg-brand-900/10">
@@ -594,14 +600,14 @@ function BankModal({ onClose }: { onClose: () => void }) {
 
         {txns.length > 0 && (
           <div>
-            <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-slate-400">Mutasi terbaru</h3>
+            <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted">Mutasi terbaru</h3>
             <ul className="max-h-56 space-y-1.5 overflow-y-auto">
               {txns.map((t) => (
-                <li key={t.id} className="flex items-center gap-2.5 rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
+                <li key={t.id} className="flex items-center gap-2.5 rounded-xl border border-line px-3 py-2 text-sm dark:border-line">
                   <span aria-hidden>{t.type === 'in' ? <ArrowDownToLine size={15} className="text-green-600" /> : <ArrowUpFromLine size={15} className="text-red-600" />}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold">{t.accountName}{t.source === 'wallet' ? ' · dari wallet' : ''}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{fmtDateTime(t.created_at)}{t.note ? ` · ${t.note}` : ''}</p>
+                    <p className="text-xs text-muted">{fmtDateTime(t.created_at)}{t.note ? ` · ${t.note}` : ''}</p>
                   </div>
                   <span className={`shrink-0 font-bold tabular-nums ${t.type === 'in' ? 'text-green-700 dark:text-green-400' : 'text-red-600'}`}>{t.type === 'in' ? '+' : '−'}{fmtID(t.amount)}</span>
                 </li>
@@ -639,7 +645,7 @@ function WithdrawModal({ balance, onClose, onWithdraw }: { balance: number; onCl
         <div className="flex flex-wrap gap-1.5">
           {[50000, 100000, 250000, balance].map((v, i) => (
             <button key={i} type="button" onClick={() => setAmount(String(Math.min(v, balance)))}
-              className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300">
+              className="rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs font-semibold text-ink hover:brightness-95 dark:bg-surface-2">
               {i === 3 ? 'Semua' : `${v / 1000}rb`}
             </button>
           ))}
@@ -685,18 +691,13 @@ function EntryModal({ entry, onClose, onSave }: { entry: Partial<FinanceEntry> |
       <div className="space-y-3">
         {/* Pilih akun pencatatan */}
         <div>
-          <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">Catat ke akun</span>
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800" role="radiogroup" aria-label="Akun pencatatan">
-            {([
-              ['wallet', 'Dompet Wallet'],
-              ['bank', 'Rekening Bank'],
-            ] as Array<['wallet' | 'bank', string]>).map(([v, lbl]) => (
-              <button key={v} role="radio" aria-checked={account === v} onClick={() => setAccount(v)}
-                className={`flex h-10 items-center justify-center gap-1.5 rounded-xl text-sm font-bold ${account === v ? 'bg-white text-slate-900 shadow dark:bg-slate-900 dark:text-white' : 'text-slate-500'}`}>
-                {v === 'wallet' ? <Vault size={15} aria-hidden /> : <Landmark size={15} aria-hidden />}{lbl}
-              </button>
-            ))}
-          </div>
+          <span className="mb-1.5 block text-sm font-medium text-ink">Catat ke akun</span>
+          <Segmented
+            kind="radio" full value={account} onChange={setAccount} label="Akun pencatatan"
+            options={([['wallet', 'Dompet Wallet'], ['bank', 'Rekening Bank']] as Array<['wallet' | 'bank', string]>).map(([v, lbl]) => ({
+              value: v, label: lbl, icon: v === 'wallet' ? <Vault size={15} aria-hidden /> : <Landmark size={15} aria-hidden />,
+            }))}
+          />
           {account === 'bank' && (
             bankAccounts.length === 0 ? (
               <p className="mt-2 text-xs text-red-600">Belum ada rekening bank — tambahkan dulu lewat tombol Bank di kartu wallet.</p>
@@ -709,15 +710,14 @@ function EntryModal({ entry, onClose, onSave }: { entry: Partial<FinanceEntry> |
             )
           )}
         </div>
-        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1.5 dark:bg-slate-800" role="radiogroup" aria-label="Jenis catatan">
-          {(['expense', 'income'] as const).map((t) => (
-            <button key={t} role="radio" aria-checked={type === t} onClick={() => { setType(t); setCategory(FINANCE_CATEGORIES[t][0]) }}
-              className={`flex h-10 items-center justify-center gap-1.5 rounded-xl text-sm font-bold ${type === t ? 'bg-white text-slate-900 shadow dark:bg-slate-900 dark:text-white' : 'text-slate-500'}`}>
-              {t === 'expense' ? <TrendingDown size={15} aria-hidden /> : <TrendingUp size={15} aria-hidden />}
-              {t === 'expense' ? 'Pengeluaran' : 'Pemasukan'}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          kind="radio" full value={type} label="Jenis catatan"
+          onChange={(t) => { setType(t); setCategory(FINANCE_CATEGORIES[t][0]) }}
+          options={(['expense', 'income'] as const).map((t) => ({
+            value: t, label: t === 'expense' ? 'Pengeluaran' : 'Pemasukan',
+            icon: t === 'expense' ? <TrendingDown size={15} aria-hidden /> : <TrendingUp size={15} aria-hidden />,
+          }))}
+        />
         <Field label="Kategori">
           <Select value={cats.includes(category as never) ? category : cats[0]} onChange={(e) => setCategory(e.target.value)}>
             {cats.map((c) => <option key={c} value={c}>{FINANCE_LABELS[c] || c}</option>)}

@@ -132,13 +132,13 @@ export function ReceiptDialog({ order, settings, onClose, reprint = false }: { o
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Transaksi berhasil">
       <button aria-label="Tutup" className="absolute inset-0 bg-slate-950/60 animate-overlay" onClick={onClose} />
-      <div className="relative flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-pop animate-scale-in dark:bg-slate-900">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+      <div className="relative flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-surface shadow-pop animate-scale-in">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <div>
             <p className={`font-bold ${reprint ? 'text-brand-700 dark:text-brand-300' : 'text-green-700 dark:text-green-400'}`}>
               {reprint ? 'Cetak ulang struk' : 'Transaksi berhasil'}
             </p>
-            <p className="text-xs text-slate-500">{order.order_no}</p>
+            <p className="text-xs text-muted">{order.order_no}</p>
           </div>
           {bt.connected ? (
             <Button size="sm" onClick={doBtPrint} disabled={busyBt}>
@@ -150,12 +150,12 @@ export function ReceiptDialog({ order, settings, onClose, reprint = false }: { o
             </Button>
           )}
         </div>
-        <div className="flex justify-center overflow-y-auto bg-slate-100 px-4 py-6 dark:bg-slate-950">
+        <div className="flex justify-center overflow-y-auto bg-surface-2 px-4 py-6">
           <div className="rounded bg-white p-3 shadow dark:bg-slate-100">
             <Receipt order={order} settings={settings} />
           </div>
         </div>
-        <div className="border-t border-slate-200 p-4 dark:border-slate-800">
+        <div className="border-t border-line p-4">
           <Button className="w-full" size="lg" onClick={onClose}>{reprint ? 'Tutup' : 'Selesai'}</Button>
         </div>
       </div>

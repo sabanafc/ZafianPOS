@@ -3,14 +3,14 @@ import { Button } from '../components/ui'
 
 export default function SetupScreen({ connError }: { connError?: string }) {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-slate-50 p-6 dark:bg-slate-950">
+    <div className="flex min-h-dvh items-center justify-center bg-canvas p-6">
       <div className="w-full max-w-lg space-y-6 text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-900 text-white dark:bg-white dark:text-slate-900" aria-hidden>
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-ink text-canvas" aria-hidden>
           <ShoppingCart size={28} />
         </div>
         <div>
           <h1 className="text-2xl font-bold">Kasir POS</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Aplikasi kasir modern untuk tablet & ponsel Android</p>
+          <p className="mt-1 text-sm text-muted">Aplikasi kasir modern untuk tablet & ponsel Android</p>
         </div>
 
         {connError && (
@@ -31,26 +31,26 @@ export default function SetupScreen({ connError }: { connError?: string }) {
           </div>
         )}
 
-        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-card dark:border-slate-800 dark:bg-slate-900">
+        <div className="space-y-3 rounded-2xl border border-line bg-surface p-5 text-left shadow-card">
           <p className="flex items-center gap-2 text-sm font-bold"><Database size={16} aria-hidden /> Setup database</p>
-          <ol className="list-decimal space-y-2.5 pl-5 text-sm text-slate-600 dark:text-slate-300">
+          <ol className="list-decimal space-y-2.5 pl-5 text-sm text-muted">
             <li>
               Buat proyek di <a href="https://supabase.com" target="_blank" rel="noreferrer" className="font-semibold text-brand-600 underline dark:text-brand-400">supabase.com</a>.
             </li>
             <li>
-              Jalankan isi file <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">supabase/migrations/0001_init.sql</code> di <strong>SQL Editor</strong> Supabase.
+              Jalankan isi file <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs">supabase/migrations/0001_init.sql</code> di <strong>SQL Editor</strong> Supabase.
             </li>
             <li>
-              Salin <strong>Project URL</strong> & <strong>anon key</strong> ke file <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">.env</code> (contoh ada di <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">.env.example</code>).
+              Salin <strong>Project URL</strong> & <strong>anon key</strong> ke file <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs">.env</code> (contoh ada di <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs">.env.example</code>).
             </li>
-            <li>Restart aplikasi (<code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">npm run dev</code>).</li>
+            <li>Restart aplikasi (<code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs">npm run dev</code>).</li>
           </ol>
-          <p className="flex items-center gap-2 pt-2 text-xs text-slate-500 dark:text-slate-400">
+          <p className="flex items-center gap-2 pt-2 text-xs text-muted">
             <FileCode size={14} aria-hidden /> Panduan lengkap tersedia di README.md
           </p>
         </div>
 
-        <p className="flex items-center justify-center gap-1.5 text-xs text-slate-400">
+        <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
           <Rocket size={13} aria-hidden /> Setelah terhubung, buka shift dan mulai berjualan
         </p>
       </div>

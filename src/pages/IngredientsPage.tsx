@@ -1,13 +1,19 @@
 import { useState } from 'react'
 import { Plus, Pencil, Trash2, Package, ArrowDownToLine, ArrowUpFromLine, Scale, History, AlertTriangle, Calculator, Bell, BellOff, ArrowRightLeft } from 'lucide-react'
-import { useIngredients, useSaveIngredient, useDeleteIngredient, useAdjustStock, useToggleIngredient, useToggleStockAlert } from '../hooks/useMaster'
+import { useIngredients, useSaveIngredient, useDeleteIngredient, useAdjustStock, useToggleIngredient, useToggleStockAlert, useProducts, useAllRecipes, useAllPackageIngredients } from '../hooks/useMaster'
 import { useStockMovements } from '../hooks/useOrders'
+import { usePurchases, useIngredientUsage } from '../hooks/usePurchases'
 import type { Ingredient } from '../types'
-import { Page, CardGrid, GridCard, Button, IconButton, Input, Select, Field, Badge, EmptyState, Switch, ConfirmDialog, Spinner } from '../components/ui'
+import { Page, CardGrid, GridCard, Button, IconButton, Input, Select, Field, Badge, EmptyState, Switch, ConfirmDialog, Spinner, Segmented } from '../components/ui'
 import { Modal } from '../components/Modal'
+import { RecommendationView } from '../components/purchasing/RecommendationView'
+import { PurchaseHistory } from '../components/purchasing/PurchaseHistory'
+import { PurchaseModal, type PurchasePrefill } from '../components/purchasing/PurchaseModal'
 import { fmtID, fmtQty, fmtDateTime, num } from '../lib/utils'
 import { ALL_UNITS, VOLUME_UNITS, WEIGHT_UNITS, costPerRecipeUnit, sameFamily, convertPurchaseToRecipe } from '../lib/units'
 import { toast } from '../lib/toast'
+
+type Tab = 'bahan' | 'rekomendasi' | 'pembelian'
 
 export default function IngredientsPage() {
   const { data: ingredients = [], isLoading } = useIngredients()
@@ -20,6 +26,14 @@ export default function IngredientsPage() {
   const [opnameFor, setOpnameFor] = useState<Ingredient | null>(null)
   const [deleting, setDeleting] = useState<Ingredient | null>(null)
   const [histOpen, setHistOpen] = useState(false)
+  const [tab, setTab] = useState<Tab>('bahan')
+  const [purchaseOpen, setPurchaseOpen] = useState(false)
+  const [purchasePrefill, setPurchasePrefill] = useState<PurchasePrefill[]>([])
+  const { data: purchases = [] } = usePurchases()
+  const { data: usage = {} } = useIngredientUsage()
+  const { data: products = [] } = useProducts()
+  const { data: recipes = [] } = useAllRecipes()
+  const { data: packageIngredients = [] } = useAllPackageIngredients()
 
   const editing = editingId === 'new' ? {} : ingredients.find((i) => i.id === editingId) || null
   const lowCount = ingredients.filter((i) => i.stock <= i.min_stock).length
@@ -29,11 +43,29 @@ export default function IngredientsPage() {
       title="Bahan Baku"
       actions={
         <div className="flex gap-2">
-          <IconButton label="Riwayat stok" variant="secondary" onClick={() => setHistOpen(true)}><History size={18} aria-hidden /></IconButton>
-          <Button onClick={() => setEditingId('new')}><Plus size={17} aria-hidden /> Bahan</Button>
+          {tab === 'bahan' && (
+            <>
+              <IconButton label="Riwayat stok" variant="secondary" onClick={() => setHistOpen(true)}><History size={18} aria-hidden /></IconButton>
+              <Button onClick={() => setEditingId('new')}><Plus size={17} aria-hidden /> Bahan</Button>
+            </>
+          )}
+          {tab === 'pembelian' && (
+            <Button onClick={() => { setPurchasePrefill([]); setPurchaseOpen(true) }}><Plus size={17} aria-hidden /> Pembelian</Button>
+          )}
         </div>
       }
     >
+      <Segmented<Tab>
+        label="Bagian bahan baku" kind="tabs" full className="mb-4"
+        value={tab} onChange={setTab}
+        options={[
+          { value: 'bahan', label: 'Stok Bahan' },
+          { value: 'rekomendasi', label: 'Rekomendasi' },
+          { value: 'pembelian', label: 'Pembelian' },
+        ]}
+      />
+
+      {tab === 'bahan' && (<>
       {lowCount > 0 && (
         <div className="mb-4 flex items-center gap-2.5 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200" role="alert">
           <AlertTriangle size={18} aria-hidden />
@@ -57,11 +89,11 @@ export default function IngredientsPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-bold">{i.name}</p>
-                      <p className="break-words text-xs text-slate-500 dark:text-slate-400">
+                      <p className="break-words text-xs text-muted">
                         {i.purchase_price ? `${fmtID(i.purchase_price)} / ${fmtQty(i.purchase_qty || 1)} ${i.purchase_unit}` : `${fmtID(i.cost_per_unit)} / ${i.unit}`}
                       </p>
                       {converted !== null && (
-                        <p className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+                        <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted">
                           <ArrowRightLeft size={11} aria-hidden />
                           {fmtQty(i.purchase_qty || 1)} {i.purchase_unit} = {fmtQty(converted)} {i.unit}
                         </p>
@@ -75,14 +107,14 @@ export default function IngredientsPage() {
                   {/* mt-auto + pt-3: baris stok selalu menempel bawah agar rapi meski kartu tanpa baris konversi */}
                   <div className="mt-auto flex flex-wrap items-end justify-between gap-2 pt-3">
                     <div>
-                      <p className={`text-2xl font-bold tabular-nums ${low ? 'text-red-600' : ''}`}>{fmtQty(i.stock)} <span className="text-sm font-medium text-slate-500">{i.unit}</span></p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">min. {fmtQty(i.min_stock)} {i.unit} · HPP {fmtID(i.cost_per_unit)}/{i.unit}</p>
+                      <p className={`text-2xl font-bold tabular-nums ${low ? 'text-red-600' : ''}`}>{fmtQty(i.stock)} <span className="text-sm font-medium text-muted">{i.unit}</span></p>
+                      <p className="text-xs text-muted">min. {fmtQty(i.min_stock)} {i.unit} · HPP {fmtID(i.cost_per_unit)}/{i.unit}{i.assumed_daily_usage > 0 ? ` · asumsi ${fmtQty(i.assumed_daily_usage)}/hari` : ''}</p>
                     </div>
                     <div className="flex gap-1">
                       <IconButton
                         label={i.low_stock_alert ? `Notifikasi stok aktif: ${i.name}` : `Notifikasi stok mati: ${i.name}`}
                         size="sm" variant={i.low_stock_alert ? 'success' : 'ghost'}
-                        className={i.low_stock_alert ? '' : 'text-slate-400'}
+                        className={i.low_stock_alert ? '' : 'text-muted'}
                         onClick={() => toggleAlert.mutate({ id: i.id, low_stock_alert: !i.low_stock_alert }, {
                           onSuccess: () => toast.info(i.low_stock_alert ? `Notifikasi ${i.name} dimatikan` : `Notifikasi ${i.name} dinyalakan`),
                         })}
@@ -101,6 +133,18 @@ export default function IngredientsPage() {
           })}
         </CardGrid>
       )}
+      </>)}
+
+      {tab === 'rekomendasi' && (
+        <RecommendationView
+          ingredients={ingredients} usage={usage}
+          products={products} recipes={recipes} packageIngredients={packageIngredients}
+          onOrder={(p) => { setPurchasePrefill(p); setPurchaseOpen(true) }}
+        />
+      )}
+      {tab === 'pembelian' && (
+        <PurchaseHistory purchases={purchases} onNew={() => { setPurchasePrefill([]); setPurchaseOpen(true) }} />
+      )}
 
       {editingId !== null && editing && <IngredientForm key={editingId} ing={editing} onClose={() => setEditingId(null)} />}
       <AdjustModal state={adjusting} onClose={() => setAdjusting(null)} />
@@ -110,6 +154,10 @@ export default function IngredientsPage() {
         open={!!deleting} onClose={() => setDeleting(null)}
         title="Hapus bahan baku?" message={`"${deleting?.name}" akan dihapus dari resep dan daftar bahan.`}
         onConfirm={() => deleting && del.mutate(deleting.id, { onSuccess: () => toast.success('Bahan dihapus'), onError: (e: Error) => toast.error(e.message) })}
+      />
+      <PurchaseModal
+        open={purchaseOpen} onClose={() => setPurchaseOpen(false)}
+        ingredients={ingredients} prefill={purchasePrefill}
       />
     </Page>
   )
@@ -127,6 +175,7 @@ function IngredientForm({ ing, onClose }: { ing: Partial<Ingredient>; onClose: (
   const [recipeUnit, setRecipeUnit] = useState(ing.unit || 'gr')
   const [stock, setStock] = useState(ing.id ? String(ing.stock) : '0')
   const [minStock, setMinStock] = useState(ing.id ? String(ing.min_stock) : '0')
+  const [assumedDaily, setAssumedDaily] = useState(ing.assumed_daily_usage ? String(ing.assumed_daily_usage) : '')
   const [alertOn, setAlertOn] = useState(ing.low_stock_alert ?? true)
 
   const computedCost = costPerRecipeUnit(num(purchasePrice), num(purchaseQty), purchaseUnit, recipeUnit)
@@ -145,7 +194,8 @@ function IngredientForm({ ing, onClose }: { ing: Partial<Ingredient>; onClose: (
         purchase_unit: purchaseUnit,
         purchase_qty: num(purchaseQty) || 1,
         purchase_price: num(purchasePrice),
-        stock: num(stock), min_stock: num(minStock), low_stock_alert: alertOn, is_active: ing.is_active ?? true,
+        stock: num(stock), min_stock: num(minStock), assumed_daily_usage: num(assumedDaily),
+        low_stock_alert: alertOn, is_active: ing.is_active ?? true,
       },
       { onSuccess: () => { toast.success(isNew ? 'Bahan ditambahkan' : 'Bahan disimpan'); onClose() }, onError: (e: Error) => toast.error(e.message) },
     )
@@ -174,8 +224,8 @@ function IngredientForm({ ing, onClose }: { ing: Partial<Ingredient>; onClose: (
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="mis. Susu UHT" />
         </Field>
 
-        <div className="rounded-2xl border border-slate-200 p-3.5 dark:border-slate-800">
-          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500">Pembelian</p>
+        <div className="rounded-2xl border border-line p-3.5 dark:border-line">
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">Pembelian</p>
           <div className="grid grid-cols-3 gap-3">
             <Field label="Harga beli (Rp)" required>
               <Input inputMode="numeric" value={purchasePrice} onChange={(e) => setPurchasePrice(e.target.value.replace(/\D/g, ''))} placeholder="0" />
@@ -187,7 +237,7 @@ function IngredientForm({ ing, onClose }: { ing: Partial<Ingredient>; onClose: (
               <Input inputMode="decimal" value={purchaseQty} onChange={(e) => setPurchaseQty(e.target.value.replace(/[^0-9.,]/g, ''))} placeholder="1" />
             </Field>
           </div>
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Contoh: harga 25.000, satuan beli pack, isi 1000, satuan resep ml → 1 kemasan = 1000 ml.</p>
+          <p className="mt-2 text-xs text-muted">Contoh: harga 25.000, satuan beli pack, isi 1000, satuan resep ml → 1 kemasan = 1000 ml.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -213,12 +263,16 @@ function IngredientForm({ ing, onClose }: { ing: Partial<Ingredient>; onClose: (
           </Field>
         </div>
 
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 px-3.5 py-3 dark:border-slate-800">
+        <Field label="Asumsi pakai per hari (opsional)" hint={`Cadangan rekomendasi saat data penjualan belum cukup. Satuan ${recipeUnit}.`}>
+          <Input inputMode="decimal" value={assumedDaily} onChange={(e) => setAssumedDaily(e.target.value.replace(/[^0-9.,]/g, ''))} placeholder="mis. 10" />
+        </Field>
+
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-line px-3.5 py-3 dark:border-line">
           <div className="flex min-w-0 items-center gap-2.5">
-            <Bell size={18} className={alertOn ? 'shrink-0 text-brand-600' : 'shrink-0 text-slate-400'} aria-hidden />
+            <Bell size={18} className={alertOn ? 'shrink-0 text-brand-600' : 'shrink-0 text-muted'} aria-hidden />
             <div className="min-w-0">
               <p className="text-sm font-bold">Notifikasi stok menipis</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Peringatan muncul saat stok menyentuh batas minimum</p>
+              <p className="text-xs text-muted">Peringatan muncul saat stok menyentuh batas minimum</p>
             </div>
           </div>
           <Switch checked={alertOn} onChange={setAlertOn} label="Notifikasi stok menipis" />
@@ -261,9 +315,9 @@ function AdjustModal({ state, onClose }: { state: { ing: Ingredient; mode: 'in' 
   return (
     <Modal open onClose={onClose} size="sm" title={mode === 'in' ? 'Stok Masuk' : 'Stok Keluar'}>
       <div className="space-y-4">
-        <div className="rounded-2xl bg-slate-100 p-4 text-center dark:bg-slate-800">
+        <div className="rounded-2xl bg-surface-2 p-4 text-center dark:bg-surface-2">
           <p className="text-sm font-bold">{ing.name}</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-xs text-muted">
             {fmtQty(ing.stock)} → <strong className={delta < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}>{fmtQty(Math.max(0, after))} {ing.unit}</strong>
           </p>
         </div>
@@ -300,12 +354,12 @@ function OpnameModal({ ing, onClose }: { ing: Ingredient; onClose: () => void })
   return (
     <Modal open onClose={onClose} size="sm" title="Stok Opname">
       <div className="space-y-4">
-        <div className="rounded-2xl bg-slate-100 p-4 text-center dark:bg-slate-800">
+        <div className="rounded-2xl bg-surface-2 p-4 text-center dark:bg-surface-2">
           <p className="text-sm font-bold">{ing.name}</p>
           <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
-            <div><p className="text-xs text-slate-500">Sistem</p><p className="font-bold tabular-nums">{fmtQty(ing.stock)}</p></div>
-            <div><p className="text-xs text-slate-500">Fisik</p><p className="font-bold tabular-nums">{fmtQty(num(physical))}</p></div>
-            <div><p className="text-xs text-slate-500">Selisih</p><p className={`font-bold tabular-nums ${diff === 0 ? '' : diff > 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600'}`}>{diff > 0 ? '+' : ''}{fmtQty(diff)}</p></div>
+            <div><p className="text-xs text-muted">Sistem</p><p className="font-bold tabular-nums">{fmtQty(ing.stock)}</p></div>
+            <div><p className="text-xs text-muted">Fisik</p><p className="font-bold tabular-nums">{fmtQty(num(physical))}</p></div>
+            <div><p className="text-xs text-muted">Selisih</p><p className={`font-bold tabular-nums ${diff === 0 ? '' : diff > 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600'}`}>{diff > 0 ? '+' : ''}{fmtQty(diff)}</p></div>
           </div>
         </div>
         <Field label={`Hasil hitung fisik (${ing.unit})`} required>
@@ -327,20 +381,20 @@ function MovementsModal({ open, onClose, moves }: { open: boolean; onClose: () =
   return (
     <Modal open={open} onClose={onClose} title="Riwayat Pergerakan Stok" size="lg">
       {moves.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-500">Belum ada pergerakan stok.</p>
+        <p className="py-8 text-center text-sm text-muted">Belum ada pergerakan stok.</p>
       ) : (
         <ul className="space-y-1.5" aria-label="Riwayat stok">
           {moves.map((m) => (
-            <li key={m.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5 text-sm dark:border-slate-800">
+            <li key={m.id} className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2.5 text-sm dark:border-line">
               <div className="min-w-0">
                 <p className="truncate font-semibold">{m.ingredient?.name || '—'}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{typeLabel[m.type] || m.type} · {m.note || ''} · {fmtDateTime(m.created_at)}</p>
+                <p className="text-xs text-muted">{typeLabel[m.type] || m.type} · {m.note || ''} · {fmtDateTime(m.created_at)}</p>
               </div>
               <div className="shrink-0 text-right">
                 <p className={`font-bold tabular-nums ${m.qty >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600'}`}>
                   {m.qty >= 0 ? '+' : ''}{fmtQty(m.qty)} {m.ingredient?.unit}
                 </p>
-                <p className="text-xs text-slate-500 tabular-nums">sisa {fmtQty(m.stock_after)}</p>
+                <p className="text-xs text-muted tabular-nums">sisa {fmtQty(m.stock_after)}</p>
               </div>
             </li>
           ))}

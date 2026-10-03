@@ -99,7 +99,7 @@ export function FinanceGate({ children }: { children: React.ReactNode }) {
       </div>
       <div className="text-center">
         <h1 className="text-lg font-bold">{stage === 'pin' ? 'Masukkan PIN Keuangan' : 'Kode Google Authenticator'}</h1>
-        <p className="mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-1 max-w-sm text-sm text-muted">
           {stage === 'pin'
             ? 'Halaman keuangan dilindungi PIN. Ketik PIN untuk membuka.'
             : 'Buka aplikasi Google Authenticator dan ketik kode 6 digit saat ini.'}
@@ -110,7 +110,7 @@ export function FinanceGate({ children }: { children: React.ReactNode }) {
         {Array.from({ length: stage === 'pin' ? 8 : 6 }, (_, i) => (
           <span
             key={i}
-            className={`h-3.5 w-3.5 rounded-full ${i < shown.length ? 'bg-brand-600' : 'bg-slate-200 dark:bg-slate-700'}`}
+            className={`h-3.5 w-3.5 rounded-full ${i < shown.length ? 'bg-brand-600' : 'bg-line'}`}
           />
         ))}
       </div>
@@ -127,7 +127,7 @@ export function FinanceGate({ children }: { children: React.ReactNode }) {
               if (k === '⌫') return pressDel()
               pressNum(k)
             }}
-            className="flex h-14 items-center justify-center rounded-xl bg-white text-xl font-bold text-slate-800 shadow-card ring-1 ring-slate-200 transition-transform active:scale-95 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700"
+            className="flex h-14 items-center justify-center rounded-xl bg-surface text-xl font-bold text-ink shadow-card ring-1 ring-line transition-transform active:scale-95 dark:bg-surface-2"
             aria-label={k === '⌫' ? 'Hapus satu digit' : k === 'C' ? 'Hapus semua' : `Angka ${k}`}
           >
             {k === '⌫' ? <Delete size={20} aria-hidden /> : k}

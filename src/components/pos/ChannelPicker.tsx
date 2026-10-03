@@ -14,8 +14,8 @@ export function ChannelPicker({ value, onChange }: { value: Channel; onChange: (
             onClick={() => onChange(c.id)}
             className={`flex h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-bold transition-colors ${
               active
-                ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800'
+                ? 'bg-ink text-canvas'
+                : 'bg-surface text-muted border border-line hover:bg-surface-2'
             }`}
           >
             <c.icon size={17} aria-hidden style={active ? undefined : { color: c.color }} />

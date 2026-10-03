@@ -47,21 +47,21 @@ export function CartList({ lines, discount, settings, held = [], online, onQty, 
 
       {lines.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800" aria-hidden>
-            <Tag size={22} className="text-slate-400" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-2 dark:bg-surface-2" aria-hidden>
+            <Tag size={22} className="text-muted" />
           </div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Keranjang kosong.<br />Pilih menu untuk mulai.</p>
+          <p className="text-sm font-medium text-muted">Keranjang kosong.<br />Pilih menu untuk mulai.</p>
         </div>
       ) : (
         <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pb-2" aria-label="Item keranjang">
           {lines.map((l) => (
-            <li key={l.productId} className="rounded-xl border border-slate-100 bg-white p-2.5 dark:border-slate-800 dark:bg-slate-900">
+            <li key={l.productId} className="rounded-xl border border-line bg-surface p-2.5 dark:border-line dark:bg-surface">
               <div className="flex items-start justify-between gap-2">
                 <p className="min-w-0 flex-1 text-[15px] font-bold leading-snug">{l.name}</p>
                 <p className="shrink-0 text-[15px] font-bold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(l.price * l.qty)}</p>
               </div>
               <div className="mt-1.5 flex items-center justify-between">
-                <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{fmtID(l.price)} × {l.qty}</p>
+                <p className="text-xs tabular-nums text-muted">{fmtID(l.price)} × {l.qty}</p>
                 <div className="flex items-center gap-1">
                   <IconButton label={`Kurangi ${l.name}`} variant="secondary" size="sm" onClick={() => onQty(l.productId, l.qty - 1)}>
                     <Minus size={14} aria-hidden />
@@ -81,7 +81,7 @@ export function CartList({ lines, discount, settings, held = [], online, onQty, 
       )}
 
       {lines.length > 0 && (
-        <div className="space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+        <div className="space-y-2 border-t border-line pt-3">
           <Input
             inputMode="numeric" placeholder="Diskon (Rp)" value={discount || ''}
             onChange={(e) => onDiscount(Number(e.target.value.replace(/\D/g, '')) || 0)}
@@ -103,8 +103,8 @@ export function CartList({ lines, discount, settings, held = [], online, onQty, 
 
       {/* Daftar pesanan ditahan */}
       {onResumeHold && held.length > 0 && (
-        <div className="mt-2 border-t border-slate-200 pt-2 dark:border-slate-800">
-          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
+        <div className="mt-2 border-t border-line pt-2">
+          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted">
             <PauseCircle size={13} aria-hidden /> Ditahan ({held.length})
           </p>
           <ul className="max-h-36 space-y-1.5 overflow-y-auto" aria-label="Pesanan ditahan">
@@ -114,7 +114,7 @@ export function CartList({ lines, discount, settings, held = [], online, onQty, 
                   <p className="truncate text-xs font-bold">
                     {h.lines.reduce((s, l) => s + l.qty, 0)} item · {fmtID(h.lines.reduce((s, l) => s + l.price * l.qty - h.discount, 0))}
                   </p>
-                  <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                  <p className="truncate text-[11px] text-muted">
                     {new Date(h.heldAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}{h.note ? ` · ${h.note}` : ''}
                   </p>
                 </div>
@@ -128,7 +128,7 @@ export function CartList({ lines, discount, settings, held = [], online, onQty, 
 
       {/* Indikator mode pencatatan online */}
       {online && lines.length > 0 && (
-        <p className="mt-2 flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+        <p className="mt-2 flex items-center gap-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-[11px] font-semibold text-muted dark:bg-surface-2">
           <PlusCircle size={12} aria-hidden /> Pesanan online: hanya dicatat, pembayaran via platform
         </p>
       )}
@@ -139,7 +139,7 @@ export function CartList({ lines, discount, settings, held = [], online, onQty, 
 function Row({ label, value, red }: { label: string; value: string; red?: boolean }) {
   return (
     <div className="flex items-center justify-between">
-      <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
+      <dt className="text-muted">{label}</dt>
       <dd className={`font-semibold tabular-nums ${red ? 'text-red-600' : ''}`}>{value}</dd>
     </div>
   )

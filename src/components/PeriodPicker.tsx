@@ -65,7 +65,7 @@ export function PeriodPicker({ period, onPeriod, customFrom, customTo, onCustom 
           className={`flex h-11 w-11 items-center justify-center rounded-xl border transition-colors ${
             period === 'custom'
               ? 'border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
-              : 'border-slate-200 bg-white text-slate-500 hover:border-brand-300 hover:text-brand-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400'
+              : 'border-line bg-surface text-muted hover:border-brand-300 hover:text-brand-600'
           }`}
         >
           <CalendarRange size={18} aria-hidden />
@@ -74,10 +74,10 @@ export function PeriodPicker({ period, onPeriod, customFrom, customTo, onCustom 
         {open && (
           <div
             style={{ left: panelX }}
-            className="absolute top-[calc(100%+6px)] z-40 w-[min(20rem,calc(100vw-2.5rem))] space-y-2.5 rounded-2xl border border-slate-200 bg-white p-3 shadow-pop dark:border-slate-800 dark:bg-slate-900"
+            className="absolute top-[calc(100%+6px)] z-40 w-[min(20rem,calc(100vw-2.5rem))] space-y-2.5 rounded-2xl border border-line bg-surface p-3 shadow-pop"
             role="dialog" aria-label="Pilih periode laporan"
           >
-            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Pilihan cepat</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Pilihan cepat</p>
             <div className="space-y-0.5" role="listbox" aria-label="Pilihan cepat periode">
               {quick.map((q) => (
                 <button
@@ -86,7 +86,7 @@ export function PeriodPicker({ period, onPeriod, customFrom, customTo, onCustom 
                   className={`flex h-9 w-full items-center justify-between rounded-lg px-2.5 text-sm font-semibold transition-colors ${
                     q.active
                       ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
-                      : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
+                      : 'text-muted hover:bg-surface-2'
                   }`}
                 >
                   {q.label}
@@ -94,8 +94,8 @@ export function PeriodPicker({ period, onPeriod, customFrom, customTo, onCustom 
                 </button>
               ))}
             </div>
-            <div className="space-y-2 border-t border-slate-100 pt-2.5 dark:border-slate-800">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Rentang khusus</p>
+            <div className="space-y-2 border-t border-line pt-2.5">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Rentang khusus</p>
               {period === 'custom' && (
                 <p className="rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
                   Aktif: {fmtDate(customFrom)} – {fmtDate(customTo)}

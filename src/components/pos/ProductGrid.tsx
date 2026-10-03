@@ -59,8 +59,8 @@ export function ProductGrid({ products, categories, activeCat, onCat, onPick }: 
       {/* Grid produk — gambar full-bleed besar */}
       {filtered.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-center">
-          <ImageOff size={32} className="text-slate-300" aria-hidden />
-          <p className="text-sm text-slate-500">Tidak ada menu ditemukan</p>
+          <ImageOff size={32} className="text-muted" aria-hidden />
+          <p className="text-sm text-muted">Tidak ada menu ditemukan</p>
         </div>
       ) : (
         <ul
@@ -75,7 +75,7 @@ export function ProductGrid({ products, categories, activeCat, onCat, onPick }: 
               <button
                 onClick={() => onPick(p)}
                 disabled={soldOut}
-                className={`group relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-slate-200 text-left shadow-card ring-brand-500 transition-transform active:scale-[0.97] disabled:cursor-not-allowed dark:bg-slate-800 ${soldOut ? 'opacity-55' : ''}`}
+                className={`group relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-surface-2 text-left shadow-card ring-brand-500 transition-transform active:scale-[0.97] disabled:cursor-not-allowed ${soldOut ? 'opacity-55' : ''}`}
                 aria-label={soldOut ? `${p.name} habis` : `Tambah ${p.name}, ${fmtID(p.price)}${p.track_stock ? `, sisa ${p.stock}` : ''}`}
               >
                 {p.image_url ? (
@@ -87,7 +87,7 @@ export function ProductGrid({ products, categories, activeCat, onCat, onPick }: 
                   />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700" aria-hidden>
-                    <ImageOff size={28} className="text-slate-400" />
+                    <ImageOff size={28} className="text-muted" />
                   </div>
                 )}
                 {/* Badge terlaris — produk paling laku di tampilan ini, lengkap dengan qty terjual */}
@@ -97,8 +97,8 @@ export function ProductGrid({ products, categories, activeCat, onCat, onPick }: 
                   </span>
                 )}
                 {/* Bar info mengikuti tema — teks & harga di tengah */}
-                <div className="absolute inset-x-0 bottom-0 z-10 bg-white px-2 py-2 text-center dark:bg-slate-900">
-                  <p className="truncate text-[15px] font-extrabold leading-tight text-slate-900 dark:text-white">{p.name}</p>
+                <div className="absolute inset-x-0 bottom-0 z-10 bg-surface px-2 py-2 text-center">
+                  <p className="truncate text-[15px] font-extrabold leading-tight text-ink">{p.name}</p>
                   <p className="mt-0.5 text-[15px] font-extrabold tabular-nums text-brand-700 dark:text-brand-300">{fmtID(p.price)}</p>
                 </div>
                 {/* Sisa stok menu (bila dilacak) */}
@@ -128,11 +128,11 @@ function CatTab({ id, label, active, onClick, count }: { id: string; label: stri
       className={`flex h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-colors ${
         active
           ? 'bg-brand-600 text-white'
-          : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'
+          : 'border border-line bg-surface text-muted hover:bg-surface-2'
       }`}
     >
       {label}
-      <span className={`rounded-full px-1.5 text-[11px] font-bold ${active ? 'bg-white/20' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+      <span className={`rounded-full px-1.5 text-[11px] font-bold ${active ? 'bg-white/20' : 'bg-surface-2 text-muted'}`}>
         {count}
       </span>
     </button>
